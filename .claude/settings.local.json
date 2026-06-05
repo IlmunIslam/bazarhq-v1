@@ -6,7 +6,8 @@
       "Bash(npm install:*)",
       "Bash(npm approve-scripts:*)",
       "Bash(npm run:*)",
-      "Bash(npx prisma:*)"
+      "Bash(npx prisma:*)",
+      "Bash(npx next:*)"
     ]
   }
 }
