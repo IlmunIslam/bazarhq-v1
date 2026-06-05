@@ -1,0 +1,398 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── Identity & Auth ─────────────────────────────────────────────────────────
+
+model User {
+  id             String    @id @default(uuid())
+  email          String    @unique
+  passwordHash   String?   @map("password_hash")
+  fullName       String    @map("full_name")
+  phone          String?
+  emailVerified  Boolean   @default(false) @map("email_verified")
+  status         UserStatus @default(active)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  shop               Shop?
+  sessions           Session[]
+  emailVerifications EmailVerification[]
+
+  @@map("users")
+}
+
+enum UserStatus {
+  active
+  suspended
+}
+
+model AdminAccount {
+  id           String      @id @default(uuid())
+  email        String      @unique
+  passwordHash String      @map("password_hash")
+  fullName     String      @map("full_name")
+  role         AdminRole   @default(support)
+  twoFaSecret  String?     @map("two_fa_secret")  // AES-256-GCM encrypted
+  twoFaEnabled Boolean     @default(false) @map("two_fa_enabled")
+  backupCodes  String[]    @map("backup_codes")   // encrypted
+  ipWhitelist  String[]    @map("ip_whitelist")
+  status       AdminStatus @default(active)
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  sessions Session[]
+
+  @@map("admin_accounts")
+}
+
+enum AdminRole {
+  superadmin
+  support
+}
+
+enum AdminStatus {
+  active
+  inactive
+}
+
+model Session {
+  id        String    @id @default(uuid())
+  jti       String    @unique           // JWT ID for targeted revocation
+  userId    String?   @map("user_id")
+  adminId   String?   @map("admin_id")
+  ipAddress String?   @map("ip_address")
+  userAgent String?   @map("user_agent")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user  User?         @relation(fields: [userId], references: [id])
+  admin AdminAccount? @relation(fields: [adminId], references: [id])
+
+  @@index([userId])
+  @@index([adminId])
+  @@map("sessions")
+}
+
+model EmailVerification {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  token     String    @unique
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("email_verifications")
+}
+
+// ─── Shop & Tenancy ───────────────────────────────────────────────────────────
+
+model Shop {
+  id          String     @id @default(uuid())
+  userId      String     @unique @map("user_id")  // one shop per merchant
+  subdomain   String     @unique                   // {subdomain}.bazarhq.com
+  name        String
+  description String?
+  logoUrl     String?    @map("logo_url")
+  status      ShopStatus @default(draft)
+  publishedAt DateTime?  @map("published_at")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  user           User            @relation(fields: [userId], references: [id])
+  theme          ShopTheme?
+  categories     ShopCategory[]
+  products       Product[]
+  orders         Order[]
+  paymentConfigs PaymentConfig[]
+  pageViews      PageView[]
+
+  @@index([subdomain])
+  @@map("shops")
+}
+
+enum ShopStatus {
+  draft
+  published
+  suspended
+}
+
+model ShopTheme {
+  id             String   @id @default(uuid())
+  shopId         String   @unique @map("shop_id")
+  primaryColor   String   @default("#000000") @map("primary_color")
+  secondaryColor String   @default("#ffffff") @map("secondary_color")
+  fontFamily     String   @default("Inter") @map("font_family")
+  bannerUrl      String?  @map("banner_url")
+  themePreset    String   @default("minimal") @map("theme_preset")
+  customCss      String?  @map("custom_css")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  shop Shop @relation(fields: [shopId], references: [id])
+
+  @@map("shop_themes")
+}
+
+model ShopCategory {
+  id        String   @id @default(uuid())
+  shopId    String   @map("shop_id")
+  name      String
+  slug      String
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  shop     Shop      @relation(fields: [shopId], references: [id])
+  products Product[]
+
+  @@unique([shopId, slug])
+  @@index([shopId])
+  @@map("shop_categories")
+}
+
+// ─── Catalogue ────────────────────────────────────────────────────────────────
+
+model Product {
+  id          String        @id @default(uuid())
+  shopId      String        @map("shop_id")
+  categoryId  String?       @map("category_id")
+  name        String
+  slug        String
+  description String?
+  basePrice   Decimal       @map("base_price") @db.Decimal(10, 2)
+  status      ProductStatus @default(draft)
+  hasVariants Boolean       @default(false) @map("has_variants")
+  stock       Int           @default(0)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  shop      Shop          @relation(fields: [shopId], references: [id])
+  category  ShopCategory? @relation(fields: [categoryId], references: [id])
+  images    ProductImage[]
+  variants  ProductVariant[]
+  orderItems OrderItem[]
+
+  @@unique([shopId, slug])
+  @@index([shopId, status])
+  @@map("products")
+}
+
+enum ProductStatus {
+  draft
+  active
+  archived
+}
+
+model ProductImage {
+  id           String   @id @default(uuid())
+  productId    String   @map("product_id")
+  url          String
+  cloudinaryId String   @map("cloudinary_id")
+  altText      String?  @map("alt_text")
+  sortOrder    Int      @default(0) @map("sort_order")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@map("product_images")
+}
+
+model ProductVariant {
+  id        String   @id @default(uuid())
+  productId String   @map("product_id")
+  name      String                         // e.g. "Red / XL"
+  sku       String?
+  price     Decimal  @db.Decimal(10, 2)
+  stock     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+
+  @@index([productId])
+  @@map("product_variants")
+}
+
+// ─── Commerce ─────────────────────────────────────────────────────────────────
+
+model Order {
+  id             String        @id @default(uuid())
+  shopId         String        @map("shop_id")
+  customerId     String?       @map("customer_id")    // null = guest order
+  orderNumber    String        @unique @map("order_number")
+  status         OrderStatus   @default(pending)
+  paymentMethod  PaymentMethod @map("payment_method")
+  paymentStatus  PaymentStatus @default(unpaid) @map("payment_status")
+  subtotal       Decimal       @db.Decimal(10, 2)
+  shippingFee    Decimal       @default(0) @db.Decimal(10, 2) @map("shipping_fee")
+  total          Decimal       @db.Decimal(10, 2)
+  // Customer snapshot (never changes even if user updates profile)
+  customerName   String        @map("customer_name")
+  customerPhone  String        @map("customer_phone")
+  customerEmail  String?       @map("customer_email")
+  shippingAddress Json         @map("shipping_address")
+  // bKash / Nagad manual verification
+  transactionId  String?       @map("transaction_id")
+  notes          String?
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  shop     Shop           @relation(fields: [shopId], references: [id])
+  items    OrderItem[]
+  timeline OrderTimeline[]
+
+  @@index([shopId, createdAt])
+  @@index([shopId, status])
+  @@map("orders")
+}
+
+enum OrderStatus {
+  pending
+  confirmed
+  processing
+  shipped
+  delivered
+  cancelled
+}
+
+enum PaymentMethod {
+  cod
+  bkash
+  nagad
+  sslcommerz
+}
+
+enum PaymentStatus {
+  unpaid
+  paid
+  refunded
+}
+
+model OrderItem {
+  id          String   @id @default(uuid())
+  orderId     String   @map("order_id")
+  productId   String   @map("product_id")
+  variantId   String?  @map("variant_id")
+  // Snapshot at time of purchase — protects history if product is edited/deleted
+  productName String   @map("product_name")
+  variantName String?  @map("variant_name")
+  unitPrice   Decimal  @map("unit_price") @db.Decimal(10, 2)
+  quantity    Int
+  subtotal    Decimal  @db.Decimal(10, 2)
+
+  order   Order          @relation(fields: [orderId], references: [id])
+  product Product        @relation(fields: [productId], references: [id])
+  variant ProductVariant? @relation(fields: [variantId], references: [id])
+
+  @@map("order_items")
+}
+
+model OrderTimeline {
+  id        String      @id @default(uuid())
+  orderId   String      @map("order_id")
+  status    OrderStatus
+  note      String?
+  createdBy String?     @map("created_by")  // userId or 'system'
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
+  @@map("order_timeline")
+}
+
+model PaymentConfig {
+  id          String        @id @default(uuid())
+  shopId      String        @map("shop_id")
+  method      PaymentMethod
+  isEnabled   Boolean       @default(false) @map("is_enabled")
+  credentials Json?         // AES-256-GCM encrypted; masked to last 4 chars in API responses
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  shop Shop @relation(fields: [shopId], references: [id])
+
+  @@unique([shopId, method])
+  @@map("payment_configs")
+}
+
+// ─── Platform ─────────────────────────────────────────────────────────────────
+
+model Announcement {
+  id         String    @id @default(uuid())
+  title      String
+  body       String
+  targetRole String    @map("target_role")   // 'merchant' | 'customer' | 'all'
+  isActive   Boolean   @default(true) @map("is_active")
+  createdBy  String    @map("created_by")    // adminId
+  createdAt  DateTime  @default(now()) @map("created_at")
+  expiresAt  DateTime? @map("expires_at")
+
+  @@map("announcements")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String   @map("actor_id")     // adminId
+  actorEmail String   @map("actor_email")
+  action     String                         // e.g. 'MERCHANT_SUSPENDED'
+  targetType String?  @map("target_type")  // e.g. 'User', 'Shop'
+  targetId   String?  @map("target_id")
+  metadata   Json?
+  ipAddress  String?  @map("ip_address")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  // INSERT-only — enforced by PostgreSQL trigger (no UPDATE or DELETE)
+  @@index([actorId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model PageView {
+  id          String   @id @default(uuid())
+  shopId      String   @map("shop_id")
+  visitorHash String   @map("visitor_hash")  // hashed fingerprint for unique visitor count
+  path        String
+  referrer    String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  shop Shop @relation(fields: [shopId], references: [id])
+
+  @@index([shopId, createdAt])
+  @@map("page_views")
+}
+
+model SavedAddress {
+  id           String   @id @default(uuid())
+  customerId   String   @map("customer_id")
+  label        String?                        // e.g. 'Home', 'Office'
+  fullName     String   @map("full_name")
+  phone        String
+  addressLine1 String   @map("address_line_1")
+  addressLine2 String?  @map("address_line_2")
+  city         String
+  district     String?
+  isDefault    Boolean  @default(false) @map("is_default")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([customerId])
+  @@map("saved_addresses")
+}
+
+model CustomerSmsPreference {
+  id            String    @id @default(uuid())
+  customerPhone String    @unique @map("customer_phone")
+  optedOut      Boolean   @default(false) @map("opted_out")
+  optedOutAt    DateTime? @map("opted_out_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@map("customer_sms_preferences")
+}
