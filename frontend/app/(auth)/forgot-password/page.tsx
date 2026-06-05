@@ -5,19 +5,17 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api-client';
 
 const schema = z.object({
   email: z.string().email('Enter a valid email address'),
-  password: z.string().min(1, 'Password is required'),
 });
 
 type FormData = z.infer<typeof schema>;
 
-export default function LoginPage() {
+export default function ForgotPasswordPage() {
+  const [sent, setSent] = useState(false);
   const [serverError, setServerError] = useState('');
-  const router = useRouter();
 
   const {
     register,
@@ -27,22 +25,33 @@ export default function LoginPage() {
 
   const onSubmit = async (data: FormData) => {
     setServerError('');
-    const res = await api.post<{ user: { id: string; email: string; fullName: string } }>(
-      '/auth/login',
-      data
-    );
+    const res = await api.post<{ message: string }>('/auth/forgot-password', data);
 
     if (res.success) {
-      router.push('/dashboard');
+      setSent(true);
     } else {
       setServerError(res.error.message);
     }
   };
 
+  if (sent) {
+    return (
+      <div className="auth-card">
+        <h1>Check your email</h1>
+        <div className="alert alert-success">
+          If an account with that email exists, we sent a password reset link. Check your inbox.
+        </div>
+        <p className="auth-footer">
+          <Link href="/login">Back to login</Link>
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="auth-card">
-      <h1>Welcome back</h1>
-      <p className="subtitle">Log in to your merchant account.</p>
+      <h1>Forgot password?</h1>
+      <p className="subtitle">Enter your email and we&apos;ll send you a reset link.</p>
 
       <form onSubmit={handleSubmit(onSubmit)} noValidate>
         <div className="field">
@@ -56,31 +65,15 @@ export default function LoginPage() {
           {errors.email && <span className="field-error">{errors.email.message}</span>}
         </div>
 
-        <div className="field">
-          <label>Password</label>
-          <input
-            {...register('password')}
-            type="password"
-            className={errors.password ? 'error' : ''}
-          />
-          {errors.password && <span className="field-error">{errors.password.message}</span>}
-        </div>
-
-        <p style={{ textAlign: 'right', fontSize: '0.8rem', marginBottom: '1rem' }}>
-          <Link href="/forgot-password" style={{ color: 'var(--color-muted)', textDecoration: 'none' }}>
-            Forgot password?
-          </Link>
-        </p>
-
         {serverError && <div className="alert alert-error">{serverError}</div>}
 
         <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
-          {isSubmitting ? 'Logging in…' : 'Log In'}
+          {isSubmitting ? 'Sending…' : 'Send Reset Link'}
         </button>
       </form>
 
       <p className="auth-footer">
-        Don&apos;t have an account? <Link href="/register">Create one</Link>
+        <Link href="/login">Back to login</Link>
       </p>
     </div>
   );

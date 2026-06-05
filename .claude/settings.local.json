@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "mcp__claude_ai_Google_Drive__search_files",
-      "Bash(docx2txt:*)"
+      "Bash(docx2txt:*)",
+      "Bash(npm install:*)",
+      "Bash(npm approve-scripts:*)",
+      "Bash(npm run:*)",
+      "Bash(npx prisma:*)"
     ]
   }
 }

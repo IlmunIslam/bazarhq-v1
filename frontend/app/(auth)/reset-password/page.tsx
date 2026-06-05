@@ -5,13 +5,11 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api-client';
 
 const schema = z
   .object({
-    fullName: z.string().min(2, 'Name must be at least 2 characters'),
-    email: z.string().email('Enter a valid email address'),
-    phone: z.string().optional(),
     password: z.string().min(8, 'Password must be at least 8 characters'),
     confirmPassword: z.string(),
   })
@@ -22,9 +20,12 @@ const schema = z
 
 type FormData = z.infer<typeof schema>;
 
-export default function RegisterPage() {
-  const [serverError, setServerError] = useState('');
+export default function ResetPasswordPage() {
+  const params = useSearchParams();
+  const token = params.get('token');
+
   const [done, setDone] = useState(false);
+  const [serverError, setServerError] = useState('');
 
   const {
     register,
@@ -34,10 +35,13 @@ export default function RegisterPage() {
 
   const onSubmit = async (data: FormData) => {
     setServerError('');
-    const res = await api.post<{ message: string }>('/auth/register', {
-      fullName: data.fullName,
-      email: data.email,
-      phone: data.phone || undefined,
+    if (!token) {
+      setServerError('Missing reset token. Please use the link from your email.');
+      return;
+    }
+
+    const res = await api.post<{ message: string }>('/auth/reset-password', {
+      token,
       password: data.password,
     });
 
@@ -51,56 +55,25 @@ export default function RegisterPage() {
   if (done) {
     return (
       <div className="auth-card">
-        <h1>Check your email</h1>
-        <p className="subtitle">
-          We sent a verification link to your inbox. Click it to activate your account.
-        </p>
+        <h1>Password reset</h1>
         <div className="alert alert-success">
-          Once verified, you can log in and start building your store.
+          Your password has been updated. You can now log in.
         </div>
-        <p className="auth-footer">
-          <Link href="/login">Back to login</Link>
-        </p>
+        <Link href="/login" className="btn btn-primary" style={{ display: 'block', textDecoration: 'none', textAlign: 'center' }}>
+          Log In
+        </Link>
       </div>
     );
   }
 
   return (
     <div className="auth-card">
-      <h1>Create your store</h1>
-      <p className="subtitle">Free to start, no credit card required.</p>
+      <h1>Reset password</h1>
+      <p className="subtitle">Choose a new password for your account.</p>
 
       <form onSubmit={handleSubmit(onSubmit)} noValidate>
         <div className="field">
-          <label>Full Name</label>
-          <input
-            {...register('fullName')}
-            placeholder="Your name"
-            className={errors.fullName ? 'error' : ''}
-          />
-          {errors.fullName && <span className="field-error">{errors.fullName.message}</span>}
-        </div>
-
-        <div className="field">
-          <label>Email</label>
-          <input
-            {...register('email')}
-            type="email"
-            placeholder="you@example.com"
-            className={errors.email ? 'error' : ''}
-          />
-          {errors.email && <span className="field-error">{errors.email.message}</span>}
-        </div>
-
-        <div className="field">
-          <label>
-            Phone <span className="optional">(optional)</span>
-          </label>
-          <input {...register('phone')} type="tel" placeholder="+880..." />
-        </div>
-
-        <div className="field">
-          <label>Password</label>
+          <label>New Password</label>
           <input
             {...register('password')}
             type="password"
@@ -125,12 +98,12 @@ export default function RegisterPage() {
         {serverError && <div className="alert alert-error">{serverError}</div>}
 
         <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
-          {isSubmitting ? 'Creating account…' : 'Create Account'}
+          {isSubmitting ? 'Resetting…' : 'Reset Password'}
         </button>
       </form>
 
       <p className="auth-footer">
-        Already have an account? <Link href="/login">Log in</Link>
+        <Link href="/login">Back to login</Link>
       </p>
     </div>
   );

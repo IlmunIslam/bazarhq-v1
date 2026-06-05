@@ -1,11 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
-import { Redis } from '@upstash/redis';
+import { getRedis } from '../lib/redis';
 import { fail } from '../utils/response';
-
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_URL!,
-  token: process.env.UPSTASH_REDIS_TOKEN!,
-});
 
 interface RateLimitOptions {
   windowSecs: number;
@@ -15,6 +10,9 @@ interface RateLimitOptions {
 
 function rateLimiter({ windowSecs, max, keyPrefix }: RateLimitOptions) {
   return async (req: Request, res: Response, next: NextFunction) => {
+    const redis = getRedis();
+    if (!redis) return next(); // skip if Redis not configured
+
     const identifier = req.userId ?? req.ip ?? 'unknown';
     const key = `${keyPrefix}:${identifier}`;
 
