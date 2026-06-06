@@ -6,6 +6,7 @@ interface ShopApiResponse {
   shop: ShopData;
   theme: ThemeData;
   categories: CategoryData[];
+  paymentMethods: string[];
 }
 
 async function fetchShop(subdomain: string): Promise<ShopApiResponse | null> {
@@ -43,6 +44,7 @@ export default async function ShopLayout({
       theme={data.theme}
       categories={data.categories}
       subdomain={params.shop}
+      paymentMethods={data.paymentMethods}
     >
       {children}
     </StorefrontShell>

@@ -37,6 +37,7 @@ interface ShopContextValue {
   theme: ThemeData;
   categories: CategoryData[];
   subdomain: string;
+  paymentMethods: string[];
 }
 
 const ShopContext = createContext<ShopContextValue | null>(null);
@@ -72,10 +73,11 @@ interface Props {
   theme: ThemeData;
   categories: CategoryData[];
   subdomain: string;
+  paymentMethods: string[];
   children: React.ReactNode;
 }
 
-export default function StorefrontShell({ shop, theme, categories, subdomain, children }: Props) {
+export default function StorefrontShell({ shop, theme, categories, subdomain, paymentMethods, children }: Props) {
   const [items, setItems] = useState<CartItem[]>([]);
 
   useEffect(() => {
@@ -99,7 +101,7 @@ export default function StorefrontShell({ shop, theme, categories, subdomain, ch
   const clear = useCallback(() => { clearCart(subdomain); setItems([]); }, [subdomain]);
 
   return (
-    <ShopContext.Provider value={{ shop, theme, categories, subdomain }}>
+    <ShopContext.Provider value={{ shop, theme, categories, subdomain, paymentMethods }}>
       <CartContext.Provider value={{ items, count, total, add, update, remove, clear }}>
         <div
           className="sf-root"

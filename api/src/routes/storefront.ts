@@ -12,12 +12,14 @@ router.get('/:subdomain', publicRateLimit, async (req, res) => {
     include: {
       theme: true,
       categories: { orderBy: { sortOrder: 'asc' } },
+      paymentConfigs: { where: { isEnabled: true }, select: { method: true } },
     },
   });
   if (!shop) return fail(res, 404, 'SHOP_NOT_FOUND', 'Shop not found or not published');
 
-  const { theme, categories, ...shopData } = shop;
-  return ok(res, { shop: shopData, theme, categories });
+  const { theme, categories, paymentConfigs, ...shopData } = shop;
+  const paymentMethods = paymentConfigs.map(p => p.method);
+  return ok(res, { shop: shopData, theme, categories, paymentMethods });
 });
 
 // GET /v1/storefront/:subdomain/products

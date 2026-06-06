@@ -1,10 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useCart, useShop } from '../_components/StorefrontShell';
+import { useCart } from '../_components/StorefrontShell';
 
 export default function CartPage() {
-  const { shop } = useShop();
   const { items, total, update, remove, clear } = useCart();
 
   if (items.length === 0) {
@@ -83,10 +82,9 @@ export default function CartPage() {
             <span>Total</span>
             <span>৳{total.toLocaleString()}</span>
           </div>
-          <button className="sf-checkout-btn" disabled>
+          <Link href="/checkout" className="sf-checkout-btn" style={{ textAlign: 'center', display: 'block', textDecoration: 'none' }}>
             Proceed to Checkout
-          </button>
-          <p className="sf-checkout-note">Checkout coming soon</p>
+          </Link>
           <Link href="/" className="sf-back-link sf-cart-continue">← Continue shopping</Link>
         </div>
       </div>
