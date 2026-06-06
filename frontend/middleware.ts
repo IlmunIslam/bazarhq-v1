@@ -7,8 +7,16 @@ export function middleware(request: NextRequest) {
   const host = request.headers.get('host') ?? '';
   const { pathname } = request.nextUrl;
 
-  // Skip rewrites for dashboard and auth routes
-  if (pathname.startsWith('/dashboard') || pathname.startsWith('/(auth)')) {
+  // Skip rewrites for dashboard and auth routes (route-group prefix (auth) is not part of the URL)
+  if (
+    pathname.startsWith('/dashboard') ||
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/register') ||
+    pathname.startsWith('/forgot-password') ||
+    pathname.startsWith('/verify-email') ||
+    pathname.startsWith('/reset-password') ||
+    pathname.startsWith('/superadmin')
+  ) {
     return NextResponse.next();
   }
 

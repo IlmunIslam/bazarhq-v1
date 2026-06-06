@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/auth-context';
 import { api } from '@/lib/api-client';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, shop, loading, refresh } = useAuth();
+  const { user, shop, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -26,8 +26,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const handleLogout = async () => {
     await api.post('/auth/logout', {});
-    await refresh();
-    router.push('/login');
+    router.replace('/login');
   };
 
   return (
