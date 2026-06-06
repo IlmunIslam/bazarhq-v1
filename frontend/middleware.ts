@@ -28,7 +28,7 @@ export function middleware(request: NextRequest) {
       // Persist in cookie so subsequent navigation keeps the shop context
       subdomain = devShop;
       const url = request.nextUrl.clone();
-      url.pathname = `/_sites/${subdomain}${pathname}`;
+      url.pathname = `/sites/${subdomain}${pathname}`;
       const response = NextResponse.rewrite(url);
       response.cookies.set('_dev_shop', subdomain, { path: '/', sameSite: 'lax' });
       return response;
@@ -47,7 +47,7 @@ export function middleware(request: NextRequest) {
 
   if (subdomain) {
     const url = request.nextUrl.clone();
-    url.pathname = `/_sites/${subdomain}${pathname}`;
+    url.pathname = `/sites/${subdomain}${pathname}`;
     return NextResponse.rewrite(url);
   }
 
@@ -55,5 +55,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|_sites).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|sites).*)', ],
 };
