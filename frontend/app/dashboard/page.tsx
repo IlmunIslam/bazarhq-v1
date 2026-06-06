@@ -91,7 +91,7 @@ function CreateShopForm() {
     <div className="setup-container">
       <div className="setup-card">
         <h1>Create your store</h1>
-        <p className="subtitle">You're one step away from selling online.</p>
+        <p className="subtitle">You&apos;re one step away from selling online.</p>
 
         <form onSubmit={handleSubmit(onSubmit)} noValidate>
           <div className="field">
