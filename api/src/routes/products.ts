@@ -281,12 +281,13 @@ router.post('/:id/variants', validate(VariantsSchema), async (req, res) => {
   if (!product) return fail(res, 404, 'PRODUCT_NOT_FOUND', 'Product not found');
 
   const { variants } = req.body;
+  const totalStock = (variants as Array<{ stock: number }>).reduce((sum, v) => sum + v.stock, 0);
   const [, , updatedProduct] = await prisma.$transaction([
     prisma.productVariant.deleteMany({ where: { productId: product.id } }),
     prisma.productVariant.createMany({ data: variants.map((v: typeof variants[0]) => ({ ...v, productId: product.id })) }),
     prisma.product.update({
       where: { id: product.id },
-      data: { hasVariants: true },
+      data: { hasVariants: true, stock: totalStock },
       include: { variants: { orderBy: { createdAt: 'asc' } } },
     }),
   ]);

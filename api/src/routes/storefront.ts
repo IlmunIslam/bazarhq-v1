@@ -56,7 +56,7 @@ router.get('/:subdomain/products', publicRateLimit, async (req, res) => {
     sort === 'price_desc' ? { basePrice: 'desc' } :
                             { createdAt: 'desc' };
 
-  const products = await prisma.product.findMany({
+  const rawProducts = await prisma.product.findMany({
     where,
     orderBy,
     take: limit + 1,
@@ -64,12 +64,20 @@ router.get('/:subdomain/products', publicRateLimit, async (req, res) => {
       images: { orderBy: { sortOrder: 'asc' }, take: 1 },
       category: { select: { id: true, name: true, slug: true } },
       _count: { select: { variants: true } },
+      variants: { select: { stock: true } },
     },
   });
 
-  const hasMore = products.length > limit;
-  const items = hasMore ? products.slice(0, limit) : products;
-  return ok(res, { products: items, nextCursor: hasMore ? items.at(-1)?.id ?? null : null });
+  const hasMore = rawProducts.length > limit;
+  const rawItems = hasMore ? rawProducts.slice(0, limit) : rawProducts;
+
+  // Use sum of variant stocks when variants exist; fall back to product-level stock otherwise
+  const items = rawItems.map(({ variants, ...p }) => ({
+    ...p,
+    stock: variants.length > 0 ? variants.reduce((sum, v) => sum + v.stock, 0) : p.stock,
+  }));
+
+  return ok(res, { products: items, nextCursor: hasMore ? rawItems.at(-1)?.id ?? null : null });
 });
 
 // GET /v1/storefront/:subdomain/products/:slug
