@@ -6,6 +6,11 @@ import { publicRateLimit } from '../middleware/rate-limiter';
 import { validate } from '../middleware/validate';
 import { ok, created, fail } from '../utils/response';
 import { prisma } from '../lib/prisma';
+import {
+  sendOrderConfirmation,
+  sendMerchantNewOrder,
+  sendOrderStatusUpdate,
+} from '../services/email';
 
 const router = Router();
 
@@ -200,6 +205,36 @@ router.post('/guest', publicRateLimit, validate(GuestOrderSchema), async (req, r
     throw err;
   }
 
+  // Fire-and-forget emails (never block the response)
+  void (async () => {
+    try {
+      const shopWithUser = await prisma.shop.findUnique({
+        where: { id: shop.id },
+        include: { user: { select: { email: true } } },
+      });
+      const shopData = { name: shop.name, subdomain };
+      const orderData = {
+        ...order,
+        customerEmail: order.customerEmail ?? undefined,
+        items: order.items.map(i => ({
+          productName: i.productName,
+          variantName: i.variantName,
+          quantity: i.quantity,
+          subtotal: i.subtotal,
+        })),
+        shippingAddress: order.shippingAddress as { line1: string; city: string; district: string },
+      };
+      await Promise.all([
+        sendOrderConfirmation(orderData, shopData),
+        shopWithUser?.user?.email
+          ? sendMerchantNewOrder(orderData, shopWithUser.user.email, shopData)
+          : Promise.resolve(),
+      ]);
+    } catch (err) {
+      console.error('[orders] email notification error:', (err as Error).message);
+    }
+  })();
+
   return created(res, { order });
 });
 
@@ -331,6 +366,33 @@ router.patch('/:id/status', requireMerchant, validate(StatusUpdateSchema), async
 
     return updatedOrder;
   });
+
+  // Fire-and-forget status update email (never block the response)
+  if (updated.customerEmail) {
+    void (async () => {
+      try {
+        const shopData = { name: shop.name, subdomain: shop.subdomain };
+        await sendOrderStatusUpdate({
+          orderNumber: updated.orderNumber,
+          customerName: updated.customerName,
+          customerPhone: updated.customerPhone,
+          customerEmail: updated.customerEmail ?? undefined,
+          total: updated.total,
+          paymentMethod: updated.paymentMethod,
+          items: updated.items.map(i => ({
+            productName: i.productName,
+            variantName: i.variantName,
+            quantity: i.quantity,
+            subtotal: i.subtotal,
+          })),
+          shippingAddress: updated.shippingAddress as { line1: string; city: string; district: string },
+          status,
+        }, shopData);
+      } catch (err) {
+        console.error('[orders] status email error:', (err as Error).message);
+      }
+    })();
+  }
 
   return ok(res, { order: updated });
 });

@@ -138,8 +138,9 @@ export default function StorefrontShell({ shop, theme, categories, subdomain, pa
           <main className="sf-main">{children}</main>
 
           <footer className="sf-footer">
-            <div className="sf-container">
+            <div className="sf-container sf-footer-inner">
               <p>© {new Date().getFullYear()} {shop.name} · Powered by BazarHQ</p>
+              <Link href="/track" className="sf-footer-track-link">Track Order</Link>
             </div>
           </footer>
         </div>

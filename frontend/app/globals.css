@@ -1887,3 +1887,179 @@ a { color: inherit; }
   gap: 0.75rem;
   margin-top: 1.25rem;
 }
+
+/* ─── Storefront footer update ────────────────────────────── */
+
+.sf-footer-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.sf-footer-track-link {
+  font-size: 0.8125rem;
+  color: #6b7280;
+  text-decoration: none;
+}
+.sf-footer-track-link:hover { text-decoration: underline; }
+
+/* ─── Order Tracking Page ─────────────────────────────────── */
+
+.sf-track { padding: 2rem 1.25rem; max-width: 800px; margin: 0 auto; }
+.sf-track-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 1.5rem; }
+
+.sf-track-form-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 1.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.sf-track-subtitle { font-size: 0.9375rem; color: #6b7280; margin-bottom: 1.25rem; }
+
+.sf-track-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.sf-track-btn {
+  padding: 0.625rem 1.5rem;
+  background: var(--sf-primary, #111827);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  align-self: flex-start;
+  transition: opacity .15s;
+}
+.sf-track-btn:hover { opacity: .88; }
+.sf-track-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+.sf-track-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  color: #b91c1c;
+  font-size: 0.9375rem;
+  margin-bottom: 1.5rem;
+}
+
+.sf-track-result { display: flex; flex-direction: column; gap: 1.25rem; }
+
+.sf-track-order-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.sf-track-order-number { font-size: 1.25rem; font-weight: 700; }
+.sf-track-order-date { font-size: 0.875rem; color: #6b7280; margin-top: 0.2rem; }
+
+.sf-track-status-badge {
+  background: #d1fae5;
+  color: #065f46;
+  font-size: 0.875rem;
+  font-weight: 700;
+  padding: 0.375rem 0.875rem;
+  border-radius: 999px;
+}
+.sf-track-status-badge.cancelled { background: #fee2e2; color: #b91c1c; }
+
+/* Progress stepper */
+.sf-track-stepper {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 1.5rem;
+  overflow-x: auto;
+}
+
+.sf-track-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  position: relative;
+  min-width: 60px;
+  text-align: center;
+}
+
+.sf-track-step-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #e5e7eb;
+  color: #9ca3af;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.sf-track-step.done .sf-track-step-circle {
+  background: var(--sf-primary, #111827);
+  color: #fff;
+}
+
+.sf-track-step.current .sf-track-step-circle {
+  background: var(--sf-primary, #111827);
+  color: #fff;
+  box-shadow: 0 0 0 4px rgba(17,24,39,.15);
+}
+
+.sf-track-step-label {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin-top: 0.5rem;
+  white-space: nowrap;
+}
+.sf-track-step.done .sf-track-step-label,
+.sf-track-step.current .sf-track-step-label { color: #111827; font-weight: 600; }
+
+.sf-track-step-line {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  width: 100%;
+  height: 2px;
+  background: #e5e7eb;
+  z-index: 0;
+}
+.sf-track-step-line.done { background: var(--sf-primary, #111827); }
+
+.sf-track-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.sf-track-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 1.25rem;
+}
+.sf-track-card-title {
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: #9ca3af;
+  margin-bottom: 0.875rem;
+}
