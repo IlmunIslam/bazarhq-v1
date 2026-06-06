@@ -45,6 +45,15 @@ app.use('/v1/storefront', storefrontRoutes);
 app.use('/v1/customer', customerRoutes);
 app.use('/v1/admin', adminRoutes);
 
+// Global error handler — catches multer/busboy errors and any unhandled next(err)
+app.use((err: Error & { code?: string }, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({ success: false, error: { code: 'FILE_TOO_LARGE', message: 'File exceeds 5 MB limit' } });
+  }
+  console.error('[unhandled error]', err.message);
+  return res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' } });
+});
+
 app.listen(PORT, () => {
   console.log(`API running on http://localhost:${PORT}`);
 });
