@@ -57,6 +57,23 @@ export async function requireAdmin(req: Request, res: Response, next: NextFuncti
   }
 }
 
+export async function requireCustomer(req: Request, res: Response, next: NextFunction) {
+  try {
+    const token = req.cookies.customerToken ?? req.headers.authorization?.replace('Bearer ', '');
+    if (!token) return fail(res, 401, 'UNAUTHORIZED', 'Customer authentication required');
+
+    const payload = verifyToken(token);
+    if (payload.role !== 'customer') return fail(res, 403, 'FORBIDDEN', 'Customer access required');
+
+    req.userId = payload.sub;  // sub = customer phone for phone-based auth
+    req.role = 'customer';
+    req.jti = payload.jti;
+    next();
+  } catch {
+    return fail(res, 401, 'INVALID_TOKEN', 'Invalid or expired token');
+  }
+}
+
 export async function optionalCustomer(req: Request, _res: Response, next: NextFunction) {
   try {
     const token = req.cookies.customerToken ?? req.headers.authorization?.replace('Bearer ', '');

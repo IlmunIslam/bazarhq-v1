@@ -129,9 +129,14 @@ export default function StorefrontShell({ shop, theme, categories, subdomain, pa
                 ))}
               </nav>
 
-              <Link href="/cart" className="sf-cart-link">
-                Cart{count > 0 && <span className="sf-cart-badge">{count}</span>}
-              </Link>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <Link href="/account" className="sf-nav-link" style={{ fontSize: '0.875rem' }}>
+                  My Orders
+                </Link>
+                <Link href="/cart" className="sf-cart-link">
+                  Cart{count > 0 && <span className="sf-cart-badge">{count}</span>}
+                </Link>
+              </div>
             </div>
           </header>
 

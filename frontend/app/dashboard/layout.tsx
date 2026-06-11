@@ -64,6 +64,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Link href="/dashboard/orders" className="sidebar-link">Orders</Link>
             <Link href="/dashboard/analytics" className="sidebar-link">Analytics</Link>
             <Link href="/dashboard/settings" className="sidebar-link">Settings</Link>
+            <Link href="/dashboard/account" className="sidebar-link">Account</Link>
           </nav>
         </aside>
       )}
