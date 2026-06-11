@@ -1,7 +1,19 @@
 import { Router } from 'express';
+import crypto from 'crypto';
 import { publicRateLimit } from '../middleware/rate-limiter';
 import { ok, fail } from '../utils/response';
 import { prisma } from '../lib/prisma';
+
+function visitorHash(req: import('express').Request): string {
+  const raw = (req.ip ?? '') + (req.headers['user-agent'] ?? '');
+  return crypto.createHash('sha256').update(raw).digest('hex');
+}
+
+function trackPageView(shopId: string, hash: string, path: string, referrer?: string) {
+  void prisma.pageView.create({
+    data: { shopId, visitorHash: hash, path, referrer: referrer ?? null },
+  }).catch(() => { /* fire-and-forget — never block response */ });
+}
 
 const router = Router();
 
@@ -19,6 +31,7 @@ router.get('/:subdomain', publicRateLimit, async (req, res) => {
 
   const { theme, categories, paymentConfigs, ...shopData } = shop;
   const paymentMethods = paymentConfigs.map(p => p.method);
+  trackPageView(shop.id, visitorHash(req), '/', req.headers.referer);
   return ok(res, { shop: shopData, theme, categories, paymentMethods });
 });
 
@@ -98,6 +111,7 @@ router.get('/:subdomain/products/:slug', publicRateLimit, async (req, res) => {
     },
   });
   if (!product) return fail(res, 404, 'PRODUCT_NOT_FOUND', 'Product not found');
+  trackPageView(shop.id, visitorHash(req), `/products/${req.params.slug}`, req.headers.referer);
   return ok(res, { product });
 });
 
