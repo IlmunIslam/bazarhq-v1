@@ -85,6 +85,11 @@ export default function ProductDetailPage() {
   const displayStock = selectedVariant ? selectedVariant.stock : product.stock;
   const inStock = displayStock > 0;
 
+  // Compare-at only applies to the base price (variants carry their own price)
+  const compareAt = product.compareAtPrice ? Number(product.compareAtPrice) : null;
+  const showCompare = !selectedVariant && compareAt !== null && compareAt > Number(displayPrice);
+  const discount = showCompare ? Math.round((1 - Number(displayPrice) / compareAt!) * 100) : null;
+
   const handleAddToCart = () => {
     add({
       productId: product.id,
@@ -122,6 +127,16 @@ export default function ProductDetailPage() {
             ) : (
               <div className="sf-pd-main-img sf-no-img">No image</div>
             )}
+            {(discount !== null || !inStock) && (
+              <div className="sf-badges">
+                {discount !== null && (
+                  <span className="sf-badge sf-badge--sale">−{discount}%</span>
+                )}
+                {!inStock && (
+                  <span className="sf-badge sf-badge--oos">Sold out</span>
+                )}
+              </div>
+            )}
           </div>
           {product.images.length > 1 && (
             <div className="sf-pd-thumbs">
@@ -144,8 +159,11 @@ export default function ProductDetailPage() {
 
           <div className="sf-pd-price-row">
             <span className="sf-pd-price">৳{Number(displayPrice).toLocaleString()}</span>
-            {product.compareAtPrice && !selectedVariant && (
-              <span className="sf-pd-was">৳{Number(product.compareAtPrice).toLocaleString()}</span>
+            {showCompare && (
+              <span className="sf-pd-was">৳{compareAt!.toLocaleString()}</span>
+            )}
+            {discount !== null && (
+              <span className="sf-pd-discount">Save {discount}%</span>
             )}
             {!inStock && <span className="sf-pd-oos">Out of stock</span>}
           </div>
@@ -153,7 +171,10 @@ export default function ProductDetailPage() {
           {/* Variant selector */}
           {product.variants.length > 0 && (
             <div className="sf-pd-variants">
-              <p className="sf-pd-label">Variant</p>
+              <p className="sf-pd-label">
+                Variant
+                {selectedVariant && <span className="sf-pd-label-value">{selectedVariant.name}</span>}
+              </p>
               <div className="sf-pd-variant-btns">
                 {product.variants.map(v => (
                   <button
@@ -182,11 +203,18 @@ export default function ProductDetailPage() {
               >+</button>
             </div>
             <button
-              className="sf-add-to-cart-btn"
+              className={`sf-add-to-cart-btn${added ? ' sf-add-to-cart-btn--added' : ''}`}
               onClick={handleAddToCart}
               disabled={!inStock}
             >
-              {added ? 'Added!' : inStock ? 'Add to Cart' : 'Out of Stock'}
+              {added ? (
+                <>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                  Added to cart
+                </>
+              ) : inStock ? 'Add to Cart' : 'Out of Stock'}
             </button>
           </div>
 

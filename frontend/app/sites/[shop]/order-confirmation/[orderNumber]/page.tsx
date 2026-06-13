@@ -96,7 +96,11 @@ function OrderConfirmationInner() {
   return (
     <div className="sf-container sf-order-confirmation">
       <div className="sf-confirmation-header">
-        <div className="sf-confirmation-icon">✓</div>
+        <div className="sf-confirmation-icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M20 6 9 17l-5-5" />
+          </svg>
+        </div>
         <h1>Order Placed!</h1>
         <p className="sf-confirmation-number">#{order.orderNumber}</p>
         <p>We&apos;ll keep you updated. Check back here anytime using your phone number.</p>

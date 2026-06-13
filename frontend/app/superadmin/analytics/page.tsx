@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useAdminAuth } from '@/lib/admin-auth-context';
 import { api } from '@/lib/api-client';
 import AdminShell from '../_components/AdminShell';
@@ -86,18 +86,28 @@ export default function AdminAnalyticsPage() {
                   Orders — Last 30 Days
                 </h2>
                 <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={data.ordersByDay}>
+                  <BarChart data={data.ordersByDay} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
                     <XAxis
                       dataKey="date"
-                      tick={{ fontSize: 11 }}
+                      tick={{ fontSize: 11, fill: '#6b7280' }}
+                      tickLine={false}
+                      axisLine={false}
                       tickFormatter={d => d.slice(5)}
                     />
-                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: '#6b7280' }}
+                      tickLine={false}
+                      axisLine={false}
+                      allowDecimals={false}
+                    />
                     <Tooltip
+                      cursor={{ fill: 'rgba(59,130,246,0.08)' }}
+                      contentStyle={{ border: '1px solid #e5e7eb', borderRadius: 6, fontSize: 12 }}
                       formatter={(v) => [v ?? 0, 'Orders']}
                       labelFormatter={l => `Date: ${l}`}
                     />
-                    <Bar dataKey="count" fill="var(--color-primary)" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="count" fill="#3b82f6" radius={[3, 3, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>

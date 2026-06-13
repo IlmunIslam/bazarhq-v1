@@ -3,11 +3,13 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api-client';
+import { useAdminAuth } from '@/lib/admin-auth-context';
 
 type Step = 'credentials' | 'totp';
 
 export default function AdminLoginPage() {
   const router = useRouter();
+  const { refresh } = useAdminAuth();
   const [step, setStep] = useState<Step>('credentials');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -40,6 +42,11 @@ export default function AdminLoginPage() {
       return;
     }
 
+    // Load the now-authenticated admin into context before navigating; the
+    // AdminAuthProvider lives in the shared superadmin layout and won't remount
+    // on this soft navigation, so without this the dashboard sees a stale
+    // `admin = null` and bounces straight back here.
+    await refresh();
     router.replace('/superadmin');
   };
 
@@ -60,6 +67,7 @@ export default function AdminLoginPage() {
       return;
     }
 
+    await refresh();
     router.replace('/superadmin');
   };
 

@@ -56,9 +56,15 @@ export default function CheckoutPage() {
 
   if (items.length === 0) {
     return (
-      <div className="sf-container sf-empty" style={{ paddingTop: '4rem' }}>
-        <p>Your cart is empty.</p>
-        <Link href="/" className="sf-back-link">← Start shopping</Link>
+      <div className="sf-container sf-empty">
+        <svg className="sf-empty-icon" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="8" cy="21" r="1" />
+          <circle cx="19" cy="21" r="1" />
+          <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
+        </svg>
+        <p className="sf-empty-title">Your cart is empty</p>
+        <p className="sf-empty-sub">Add items to your cart before checking out.</p>
+        <Link href="/" className="sf-empty-cta">Start shopping</Link>
       </div>
     );
   }
