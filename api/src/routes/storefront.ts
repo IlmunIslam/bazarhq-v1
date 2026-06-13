@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import crypto from 'crypto';
+import type { Prisma } from '@prisma/client';
 import { publicRateLimit } from '../middleware/rate-limiter';
 import { ok, fail } from '../utils/response';
 import { prisma } from '../lib/prisma';
@@ -45,8 +46,7 @@ router.get('/:subdomain/products', publicRateLimit, async (req, res) => {
   const { category, search, sort, cursor, limit: limitRaw } = req.query;
   const limit = Math.min(Number(limitRaw) || 20, 100);
 
-  type ProductWhere = Parameters<typeof prisma.product.findMany>[0]['where'];
-  const where: ProductWhere = { shopId: shop.id, status: 'active' };
+  const where: Prisma.ProductWhereInput = { shopId: shop.id, status: 'active' };
 
   if (category) {
     const cat = await prisma.shopCategory.findFirst({
@@ -65,8 +65,7 @@ router.get('/:subdomain/products', publicRateLimit, async (req, res) => {
 
   if (cursor) where.id = { lt: String(cursor) };
 
-  type OrderBy = Parameters<typeof prisma.product.findMany>[0]['orderBy'];
-  const orderBy: OrderBy =
+  const orderBy: Prisma.ProductOrderByWithRelationInput =
     sort === 'price_asc'  ? { basePrice: 'asc' } :
     sort === 'price_desc' ? { basePrice: 'desc' } :
                             { createdAt: 'desc' };

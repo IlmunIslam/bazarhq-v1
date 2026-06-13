@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { z } from 'zod';
+import type { Prisma } from '@prisma/client';
 import { requireMerchant } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { ok, created, fail } from '../utils/response';
@@ -130,7 +131,7 @@ router.get('/', async (req, res) => {
   const { status, category, search, cursor, limit: limitRaw } = req.query;
   const limit = Math.min(Number(limitRaw) || 20, 100);
 
-  const where: Parameters<typeof prisma.product.findMany>[0]['where'] = { shopId: shop.id };
+  const where: Prisma.ProductWhereInput = { shopId: shop.id };
   if (status) where.status = status as 'draft' | 'active' | 'archived';
   if (category) where.categoryId = String(category);
   if (search) where.name = { contains: String(search), mode: 'insensitive' };

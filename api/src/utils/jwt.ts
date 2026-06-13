@@ -10,7 +10,7 @@ interface JwtPayload {
   shopId?: string;
 }
 
-const EXPIRY: Record<Role, string> = {
+const EXPIRY: Record<Role, `${number}${'s' | 'm' | 'h' | 'd'}`> = {
   merchant: '7d',
   customer: '30d',
   admin: '8h',

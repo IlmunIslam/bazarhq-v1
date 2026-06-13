@@ -48,6 +48,20 @@ export async function requireAdmin(req: Request, res: Response, next: NextFuncti
     const session = await prisma.session.findUnique({ where: { jti: payload.jti } });
     if (!session || session.revokedAt) return fail(res, 401, 'SESSION_REVOKED', 'Session has been revoked');
 
+    // 30-minute inactivity timeout
+    const { getRedis } = await import('../lib/redis');
+    const redis = getRedis();
+    if (redis) {
+      const activityKey = `admin:activity:${payload.jti}`;
+      const active = await redis.get(activityKey);
+      if (!active) {
+        // Revoke the session to keep DB clean
+        await prisma.session.update({ where: { jti: payload.jti }, data: { revokedAt: new Date() } });
+        return fail(res, 401, 'SESSION_EXPIRED', 'Session expired due to inactivity. Please log in again.');
+      }
+      await redis.expire(activityKey, 30 * 60);
+    }
+
     req.adminId = payload.sub;
     req.role = 'admin';
     req.jti = payload.jti;
