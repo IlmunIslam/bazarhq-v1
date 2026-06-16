@@ -18,3 +18,46 @@ services:
       # behaves as production. Render does NOT set this automatically.
       - key: NODE_ENV
         value: production
+      # PORT is injected automatically by Render — do not declare it here.
+
+      # --- Database (Supabase / Postgres, used by Prisma) ---
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+
+      # --- Auth & crypto secrets ---
+      - key: JWT_SECRET
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+
+      # --- Frontend origin (CORS + email links) ---
+      - key: FRONTEND_URL
+        sync: false
+
+      # --- Image CDN (Cloudinary) ---
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+
+      # --- Cache / rate-limit (Upstash Redis) ---
+      - key: UPSTASH_REDIS_URL
+        sync: false
+      - key: UPSTASH_REDIS_TOKEN
+        sync: false
+
+      # --- Email (Resend) ---
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM_EMAIL
+        sync: false
+
+      # --- Used only by the one-off `npm run seed:admin` script ---
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
