@@ -21,8 +21,28 @@ import adminRoutes from './routes/admin';
 const app = express();
 const PORT = process.env.PORT ?? 3001;
 
-const corsOptions = {
-  origin: process.env.FRONTEND_URL ?? 'http://localhost:3000',
+// Static allowlist: localhost (dev), the Vercel production frontend, plus any
+// comma-separated origins provided via FRONTEND_URL.
+const allowedOrigins = new Set(
+  [
+    'http://localhost:3000',
+    'https://bazarhq-v1-frontend.vercel.app',
+    ...(process.env.FRONTEND_URL ?? '').split(',').map((o) => o.trim()),
+  ].filter(Boolean)
+);
+
+// Storefronts and the admin/superadmin panels are served from *.bazarhq.com
+// (and the bare apex), so allow any bazarhq.com subdomain dynamically.
+const bazarhqHost = /^https:\/\/([a-z0-9-]+\.)*bazarhq\.com$/i;
+
+const corsOptions: cors.CorsOptions = {
+  origin(origin, callback) {
+    // Non-browser clients (curl, server-to-server, health checks) send no Origin.
+    if (!origin || allowedOrigins.has(origin) || bazarhqHost.test(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error(`Origin not allowed by CORS: ${origin}`));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
