@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { api } from '@/lib/api-client';
+import { storefrontUrl } from '@/lib/storefront-url';
 
 const ICONS: Record<string, React.ReactNode> = {
   overview: <path d="M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1V9.5Z" />,
@@ -63,7 +64,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <nav className="dashboard-header-right">
           {shop && (
             <a
-              href={`http://${shop.subdomain}.bazarhq.com`}
+              href={storefrontUrl(shop.subdomain)}
               target="_blank"
               rel="noopener noreferrer"
               className="header-link"

@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth } from '@/lib/auth-context';
 import { api } from '@/lib/api-client';
+import { storefrontUrl } from '@/lib/storefront-url';
 
 // ─── Shop creation ────────────────────────────────────────────────────────────
 
@@ -207,7 +208,7 @@ function DashboardHome() {
         <h1>Welcome, {user?.fullName?.split(' ')[0]}!</h1>
         <p className="subtitle">
           Your store:{' '}
-          <a href={`http://${shop.subdomain}.bazarhq.com`} target="_blank" rel="noopener noreferrer">
+          <a href={storefrontUrl(shop.subdomain)} target="_blank" rel="noopener noreferrer">
             {shop.subdomain}.bazarhq.com ↗
           </a>
           {' '}
@@ -264,7 +265,7 @@ function DashboardHome() {
           <div className="checklist-card">
             <div className="alert alert-success">
               🎉 Your store is live at{' '}
-              <a href={`http://${shop.subdomain}.bazarhq.com`} target="_blank" rel="noopener noreferrer">
+              <a href={storefrontUrl(shop.subdomain)} target="_blank" rel="noopener noreferrer">
                 {shop.subdomain}.bazarhq.com
               </a>
             </div>
