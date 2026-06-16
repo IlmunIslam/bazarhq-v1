@@ -5,6 +5,7 @@ import { requireCustomer } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { ok, created, fail } from '../utils/response';
 import { signToken } from '../utils/jwt';
+import { authCookieOptions, clearCookieOptions } from '../utils/cookies';
 import { prisma } from '../lib/prisma';
 
 const router = Router();
@@ -40,12 +41,7 @@ router.post('/auth/login', publicRateLimit, validate(LoginSchema), async (req, r
   // No session row for customers in demo (stateless JWT)
   void jti; // jti embedded in token for reference
 
-  res.cookie('customerToken', token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-  });
+  res.cookie('customerToken', token, authCookieOptions(30 * 24 * 60 * 60 * 1000)); // 30 days
 
   // Find name from the most recent order
   const latestOrder = await prisma.order.findFirst({
@@ -62,7 +58,7 @@ router.post('/auth/login', publicRateLimit, validate(LoginSchema), async (req, r
 // ─── POST /v1/customer/auth/logout ────────────────────────────────────────────
 
 router.post('/auth/logout', (_req, res) => {
-  res.clearCookie('customerToken');
+  res.clearCookie('customerToken', clearCookieOptions());
   return ok(res, { message: 'Signed out' });
 });
 

@@ -9,6 +9,7 @@ import { requireAdmin } from '../middleware/auth';
 import { publicRateLimit } from '../middleware/rate-limiter';
 import { ok, created, fail } from '../utils/response';
 import { signToken } from '../utils/jwt';
+import { authCookieOptions, clearCookieOptions } from '../utils/cookies';
 import { encrypt, decrypt } from '../utils/encryption';
 import { getRedis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
@@ -69,12 +70,7 @@ async function issueAdminJwt(adminId: string, req: import('express').Request, re
     await redis.set(`admin:activity:${jti}`, '1', { ex: 30 * 60 });
   }
 
-  res.cookie('adminToken', token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 8 * 60 * 60 * 1000,
-  });
+  res.cookie('adminToken', token, authCookieOptions(8 * 60 * 60 * 1000));
 }
 
 // ─── POST /v1/admin/auth/login ───────────────────────────────────────────────
@@ -197,7 +193,7 @@ router.post('/auth/logout', async (req, res) => {
   const redis = getRedis();
   await prisma.session.update({ where: { jti: req.jti! }, data: { revokedAt: new Date() } });
   if (redis) await redis.del(`admin:activity:${req.jti}`);
-  res.clearCookie('adminToken');
+  res.clearCookie('adminToken', clearCookieOptions());
   return ok(res, { message: 'Logged out' });
 });
 

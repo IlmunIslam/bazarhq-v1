@@ -7,6 +7,7 @@ import { requireMerchant } from '../middleware/auth';
 import { publicRateLimit } from '../middleware/rate-limiter';
 import { ok, created, fail } from '../utils/response';
 import { signToken } from '../utils/jwt';
+import { authCookieOptions, clearCookieOptions } from '../utils/cookies';
 import { getRedis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import * as emailService from '../services/email';
@@ -150,12 +151,7 @@ router.post('/login', publicRateLimit, validate(LoginSchema), async (req, res) =
     },
   });
 
-  res.cookie('token', token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-  });
+  res.cookie('token', token, authCookieOptions(7 * 24 * 60 * 60 * 1000));
 
   return ok(res, {
     user: { id: user.id, email: user.email, fullName: user.fullName },
@@ -169,7 +165,7 @@ router.post('/logout', requireMerchant, async (req, res) => {
     data: { revokedAt: new Date() },
   });
 
-  res.clearCookie('token');
+  res.clearCookie('token', clearCookieOptions());
   return ok(res, { message: 'Logged out successfully' });
 });
 

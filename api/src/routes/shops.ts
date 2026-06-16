@@ -5,6 +5,7 @@ import { validate } from '../middleware/validate';
 import { publicRateLimit } from '../middleware/rate-limiter';
 import { ok, created, fail } from '../utils/response';
 import { signToken } from '../utils/jwt';
+import { authCookieOptions } from '../utils/cookies';
 import { prisma } from '../lib/prisma';
 
 const router = Router();
@@ -85,12 +86,7 @@ router.post('/', requireMerchant, validate(CreateShopSchema), async (req, res) =
     },
   });
 
-  res.cookie('token', token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-  });
+  res.cookie('token', token, authCookieOptions(7 * 24 * 60 * 60 * 1000));
 
   return created(res, { shop });
 });
