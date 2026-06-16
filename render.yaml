@@ -1,0 +1,20 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# Defines the BazarHQ API web service. This repo is an npm-workspaces monorepo,
+# so install/build run from the repo root (where `@bazarhq/shared` is linked)
+# and the build/start scripts are scoped to the `api` workspace.
+services:
+  - type: web
+    name: bazarhq-api
+    runtime: node
+    rootDir: .
+    # Root install links workspaces (incl. @bazarhq/shared), then the api build
+    # runs `prisma generate && tsc`.
+    buildCommand: npm install && npm run build --workspace=api
+    startCommand: npm run start --workspace=api
+    healthCheckPath: /health
+    envVars:
+      # Required so cookies use Secure + SameSite=None cross-site and the build
+      # behaves as production. Render does NOT set this automatically.
+      - key: NODE_ENV
+        value: production
