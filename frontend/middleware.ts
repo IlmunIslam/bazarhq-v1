@@ -20,23 +20,25 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const devShop = request.nextUrl.searchParams.get('_shop');
+  // The ?_shop= param selects a storefront without a per-shop subdomain. This is
+  // required in production on Vercel (single domain, no *.bazarhq.com subdomains)
+  // and is also how local dev targets a shop — so it must run in every env, not
+  // just development.
+  const queryShop = request.nextUrl.searchParams.get('_shop');
   let subdomain: string | null = null;
 
-  if (process.env.NODE_ENV === 'development') {
-    if (devShop) {
-      // Persist in cookie so subsequent navigation keeps the shop context
-      subdomain = devShop;
-      const url = request.nextUrl.clone();
-      url.pathname = `/sites/${subdomain}${pathname}`;
-      const response = NextResponse.rewrite(url);
-      response.cookies.set('_dev_shop', subdomain, { path: '/', sameSite: 'lax' });
-      return response;
-    }
-    // Use cookie set by previous ?_shop= visit
-    const cookieShop = request.cookies.get('_dev_shop')?.value;
-    if (cookieShop) subdomain = cookieShop;
+  if (queryShop) {
+    // Persist in cookie so subsequent navigation keeps the shop context
+    subdomain = queryShop;
+    const url = request.nextUrl.clone();
+    url.pathname = `/sites/${subdomain}${pathname}`;
+    const response = NextResponse.rewrite(url);
+    response.cookies.set('_dev_shop', subdomain, { path: '/', sameSite: 'lax' });
+    return response;
   }
+  // Use cookie set by a previous ?_shop= visit
+  const cookieShop = request.cookies.get('_dev_shop')?.value;
+  if (cookieShop) subdomain = cookieShop;
 
   if (!subdomain) {
     const hostname = host.split(':')[0]; // strip port
