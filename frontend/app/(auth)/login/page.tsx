@@ -7,6 +7,7 @@ import { z } from 'zod';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api-client';
+import { useAuth } from '@/lib/auth-context';
 
 const schema = z.object({
   email: z.string().email('Enter a valid email address'),
@@ -18,6 +19,7 @@ type FormData = z.infer<typeof schema>;
 export default function LoginPage() {
   const [serverError, setServerError] = useState('');
   const router = useRouter();
+  const { refresh } = useAuth();
 
   const {
     register,
@@ -33,7 +35,11 @@ export default function LoginPage() {
     );
 
     if (res.success) {
-      router.push('/dashboard');
+      // Load the now-authenticated user into context before navigating; the
+      // AuthProvider doesn't remount on this soft navigation, so without this the
+      // dashboard guard sees a stale `user = null` and bounces back to login.
+      await refresh();
+      router.replace('/dashboard');
     } else {
       setServerError(res.error.message);
     }
