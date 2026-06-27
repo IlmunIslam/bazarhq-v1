@@ -1,6 +1,12 @@
 import dotenv from 'dotenv';
 import path from 'path';
-dotenv.config({ path: path.join(__dirname, '../.env') });
+
+// In production (Render) every env var is injected directly into process.env via
+// the dashboard — there is no .env file on disk. Only load a local .env during
+// development, and never override values already present in process.env.
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config({ path: path.join(__dirname, '../.env'), override: false });
+}
 
 import express from 'express';
 import cors from 'cors';
@@ -17,6 +23,33 @@ import accountRoutes from './routes/account';
 import storefrontRoutes from './routes/storefront';
 import customerRoutes from './routes/customer';
 import adminRoutes from './routes/admin';
+
+// Fail fast on a missing or malformed database connection string. Without this,
+// Prisma only surfaces the problem on the first query — as a process crash and an
+// opaque HTTP 502 — long after startup logs say the service is "live".
+function assertValidPostgresUrl(name: string, value: string | undefined, required: boolean): void {
+  if (!value) {
+    if (required) {
+      throw new Error(
+        `${name} is not set. In production it must be supplied via the host environment (e.g. the Render dashboard).`
+      );
+    }
+    return;
+  }
+  // A well-formed connection URL has exactly one "@" separating the credentials
+  // from the host. A literal "@" in the password (common in generated passwords)
+  // must be percent-encoded as %40 — otherwise the URL parser mis-splits the
+  // host/user and Supabase/Postgres reports "Tenant or user not found".
+  const afterScheme = value.split('://')[1] ?? '';
+  if ((afterScheme.match(/@/g)?.length ?? 0) > 1) {
+    throw new Error(
+      `${name} contains an unencoded "@" in the password. Percent-encode it as %40 (e.g. "p@ss" → "p%40ss").`
+    );
+  }
+}
+
+assertValidPostgresUrl('DATABASE_URL', process.env.DATABASE_URL, true);
+assertValidPostgresUrl('DIRECT_URL', process.env.DIRECT_URL, false);
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;

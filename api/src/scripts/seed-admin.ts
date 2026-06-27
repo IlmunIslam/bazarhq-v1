@@ -1,6 +1,11 @@
 import dotenv from 'dotenv';
 import path from 'path';
-dotenv.config({ path: path.join(__dirname, '../../.env') });
+
+// On Render the admin seed runs with env vars already injected via the dashboard;
+// only fall back to a local .env in development, and never override process.env.
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config({ path: path.join(__dirname, '../../.env'), override: false });
+}
 
 import bcrypt from 'bcryptjs';
 import { prisma } from '../lib/prisma';
