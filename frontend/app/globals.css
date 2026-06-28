@@ -171,6 +171,64 @@ a { color: inherit; }
 
 .auth-footer a:hover { text-decoration: underline; }
 
+/* ─── Super admin login (locked-down, distinct from merchant auth) ── */
+.admin-login-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  /* dark "command-centre" backdrop signals a restricted zone */
+  background:
+    radial-gradient(75% 55% at 50% -10%, #1e293b 0%, transparent 60%),
+    linear-gradient(180deg, #0f172a 0%, #020617 100%);
+}
+
+.admin-login-card {
+  position: relative;
+  background: var(--color-surface);
+  border-radius: 12px;
+  padding: 2.25rem 2rem 1.75rem;
+  width: 100%;
+  max-width: 400px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  box-shadow: 0 22px 50px -18px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+/* security accent stripe along the top edge */
+.admin-login-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: linear-gradient(90deg, #0f172a, #475569 50%, #0f172a);
+}
+
+.admin-login-badge {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0f172a;
+  color: #fff;
+  margin-bottom: 1rem;
+}
+.admin-login-badge svg { width: 22px; height: 22px; }
+
+.admin-login-note {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}
+.admin-login-note svg { width: 13px; height: 13px; flex-shrink: 0; }
+
 .form-divider {
   display: flex;
   align-items: center;
