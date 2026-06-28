@@ -917,7 +917,7 @@ a { color: inherit; }
   width: 100%;
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 1.25rem;
+  padding: 0 1.5rem;
 }
 
 /* Header */
@@ -1047,21 +1047,26 @@ a { color: inherit; }
 .sf-hero-text {
   position: relative;
   isolation: isolate;
-  background: linear-gradient(180deg, #f7f7f8 0%, #ffffff 100%);
-  padding: clamp(3rem, 7vw, 5.5rem) 0;
+  background: linear-gradient(180deg, #fafafa 0%, #ffffff 100%);
+  padding: clamp(3.5rem, 8vw, 6rem) 0;
   color: #111827;
   border-bottom: 1px solid #ececed;
   overflow: hidden;
 }
-/* soft, theme-neutral corner glows for depth instead of a flat block */
+/* Theme-tinted glows for depth + brand presence. color-mix keeps each
+   merchant's primary/secondary low-opacity over a near-white base, so dark
+   hero text stays readable for any theme (a pale brand colour just yields a
+   clean near-white hero). Falls back to neutral grey if vars are unset. */
 .sf-hero-text::before {
   content: '';
   position: absolute;
   inset: 0;
   z-index: -1;
   background:
-    radial-gradient(42% 70% at 88% -10%, rgba(17,24,39,.06), transparent 70%),
-    radial-gradient(48% 80% at 0% 110%, rgba(17,24,39,.05), transparent 70%);
+    radial-gradient(55% 85% at 88% -15%,
+      color-mix(in srgb, var(--sf-primary, #111827) 14%, transparent), transparent 72%),
+    radial-gradient(48% 80% at -5% 115%,
+      color-mix(in srgb, var(--sf-secondary, #6b7280) 12%, transparent), transparent 72%);
   pointer-events: none;
 }
 
@@ -1072,6 +1077,16 @@ a { color: inherit; }
   color: #111827;
   margin-bottom: 0.625rem;
   animation: sf-hero-in .6s cubic-bezier(.2,.7,.3,1) both;
+}
+/* short brand-colour accent rule under the store name for a designed feel */
+.sf-hero-title-plain::after {
+  content: '';
+  display: block;
+  width: 52px;
+  height: 4px;
+  margin-top: 1.125rem;
+  border-radius: 999px;
+  background: var(--sf-primary, #111827);
 }
 .sf-hero-subtitle-plain {
   font-size: clamp(1rem, 1.6vw, 1.1875rem);
