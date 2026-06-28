@@ -27,3 +27,8 @@ npm-debug.log*
 # Editor
 .vscode/
 .idea/
+
+# Playwright / test artifacts
+.playwright-mcp/
+/*.png
+screenshots/
