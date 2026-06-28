@@ -305,6 +305,7 @@ router.get('/merchants', async (req, res) => {
       fullName: u.fullName,
       phone: u.phone,
       status: u.status,
+      emailVerified: u.emailVerified,
       createdAt: u.createdAt,
       shop: u.shop,
     })),
@@ -345,6 +346,37 @@ router.patch('/merchants/:id', validate(MerchantPatchSchema), async (req, res) =
   });
 
   return ok(res, { message: `Merchant ${status === 'suspended' ? 'suspended' : 'activated'}` });
+});
+
+// ─── POST /v1/admin/merchants/:id/verify-email ───────────────────────────────
+
+router.post('/merchants/:id/verify-email', async (req, res) => {
+  const { id } = req.params;
+
+  const user = await prisma.user.findUnique({ where: { id } });
+  if (!user) return fail(res, 404, 'NOT_FOUND', 'Merchant not found');
+
+  if (user.emailVerified) {
+    return ok(res, { message: 'Email already verified' });
+  }
+
+  const admin = await prisma.adminAccount.findUnique({
+    where: { id: req.adminId },
+    select: { email: true },
+  });
+
+  await prisma.user.update({ where: { id }, data: { emailVerified: true } });
+
+  await writeAuditLog({
+    actorId: req.adminId!,
+    actorEmail: admin?.email ?? 'unknown',
+    action: 'MERCHANT_EMAIL_VERIFIED',
+    targetType: 'User',
+    targetId: id,
+    ipAddress: req.ip,
+  });
+
+  return ok(res, { message: 'Email verified' });
 });
 
 // ─── PATCH /v1/admin/shops/:id ───────────────────────────────────────────────

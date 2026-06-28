@@ -21,6 +21,7 @@ interface Merchant {
   fullName: string;
   phone: string | null;
   status: 'active' | 'suspended';
+  emailVerified: boolean;
   createdAt: string;
   shop: Shop | null;
 }
@@ -76,6 +77,21 @@ export default function MerchantsPage() {
         prev.map(m => m.id === merchant.id ? { ...m, status: newStatus } : m)
       );
       setMsg({ id: merchant.id, type: 'success', text: newStatus === 'suspended' ? 'Suspended' : 'Activated' });
+    } else {
+      setMsg({ id: merchant.id, type: 'error', text: (res as any).error?.message ?? 'Failed' });
+    }
+    setTimeout(() => setMsg(null), 3000);
+  };
+
+  const verifyEmail = async (merchant: Merchant) => {
+    setActionId(`verify-${merchant.id}`);
+    const res = await api.post(`/admin/merchants/${merchant.id}/verify-email`, {});
+    setActionId(null);
+    if (res.success) {
+      setMerchants(prev =>
+        prev.map(m => m.id === merchant.id ? { ...m, emailVerified: true } : m)
+      );
+      setMsg({ id: merchant.id, type: 'success', text: 'Email verified' });
     } else {
       setMsg({ id: merchant.id, type: 'error', text: (res as any).error?.message ?? 'Failed' });
     }
@@ -207,6 +223,16 @@ export default function MerchantsPage() {
                       </td>
                       <td>
                         <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                          {!m.emailVerified && (
+                            <button
+                              className="btn btn-sm btn-secondary"
+                              onClick={() => verifyEmail(m)}
+                              disabled={actionId === `verify-${m.id}`}
+                              style={{ fontSize: '0.8125rem' }}
+                            >
+                              {actionId === `verify-${m.id}` ? '…' : 'Verify email'}
+                            </button>
+                          )}
                           <button
                             className={`btn btn-sm ${m.status === 'active' ? 'btn-danger-outline' : 'btn-secondary'}`}
                             onClick={() => toggleMerchantStatus(m)}
