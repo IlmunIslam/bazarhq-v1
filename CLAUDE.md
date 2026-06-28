@@ -49,7 +49,19 @@ npm run lint     # ESLint
 | SMS | SSL Wireless (Bangladesh) |
 | Cache / Rate limit | Upstash Redis |
 | Frontend hosting | Vercel (auto-deploy on push to main, root: `/frontend`) |
-| API hosting | Railway (auto-deploy on push, root: `/api`) — Prisma migrations run as pre-deploy hook |
+| API hosting | Render (auto-deploy on push, root: `/api`) — Prisma migrations run as pre-deploy hook |
+
+## Live Deployment URLs
+
+These are the **real** URLs for the deployed app — always use these for testing/screenshots:
+
+| Service | URL |
+|---------|-----|
+| Frontend (Vercel) | `https://bazarhq-v1-frontend.vercel.app` |
+| API (Render) | `https://bazarhq-api.onrender.com` |
+| Superadmin panel | `https://bazarhq-v1-frontend.vercel.app/superadmin/login` |
+
+> **Note:** `bazarhq.com` is a **placeholder domain we do not own** — ignore it entirely. It currently serves an unrelated marketing template (orangebd.com). The custom-domain mapping described elsewhere in this doc (`{shop}.bazarhq.com`, `api.bazarhq.com`) is aspirational, not live.
 
 ## Architecture: Four URL Spaces
 
