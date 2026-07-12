@@ -151,10 +151,20 @@ router.post('/login', publicRateLimit, validate(LoginSchema), async (req, res) =
     },
   });
 
-  res.cookie('token', token, authCookieOptions(7 * 24 * 60 * 60 * 1000));
+  // Web clients keep httpOnly-cookie auth exactly as before. Native clients
+  // (React Native) can't read httpOnly cookies, so they opt in with the
+  // `X-Client: mobile` header and receive the JWT in the response body to
+  // persist in expo-secure-store. Either way the same Session row + jti back
+  // the token, so it stays fully revocable regardless of client.
+  const isMobile = req.get('x-client') === 'mobile';
+
+  if (!isMobile) {
+    res.cookie('token', token, authCookieOptions(7 * 24 * 60 * 60 * 1000));
+  }
 
   return ok(res, {
     user: { id: user.id, email: user.email, fullName: user.fullName },
+    ...(isMobile ? { token } : {}),
   });
 });
 
