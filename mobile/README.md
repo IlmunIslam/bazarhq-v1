@@ -1,6 +1,6 @@
 # BazarHQ Mobile (Android)
 
-Native Android app for BazarHQ, built with **Expo SDK 56** (Expo Router, TypeScript).
+Native Android app for BazarHQ, built with **Expo SDK 54** (Expo Router, TypeScript).
 Talks to the same production API as the web app (`https://bazarhq-api.onrender.com/v1`).
 
 Status: **Sprint 0 — foundation only.** Navigation skeleton + API client + one
@@ -12,7 +12,7 @@ connectivity proof. No real screens, auth, or data yet.
 array (`["shared", "frontend", "api"]`) and keeps its **own isolated
 `node_modules`**.
 
-**Why:** Expo SDK 56 requires **React 19**, but `frontend/` pins **React 18.3**.
+**Why:** Expo SDK 54 requires **React 19** (19.1), but `frontend/` pins **React 18.3**.
 Keeping mobile out of the workspace tree prevents npm hoisting from forcing a
 React version that would break the working frontend.
 
@@ -33,7 +33,8 @@ npx expo start            # scan the QR in Expo Go (phone on same Wi-Fi)
 npx expo start --tunnel
 ```
 
-Use the latest **Expo Go** from the Play Store (needed for SDK 56). On a real
+Use the standard **Expo Go** from the Play Store — it supports SDK 54 (the
+Play-Store Expo Go tracks SDK 54; that's why this project targets 54). On a real
 device the Customer tab shows `Connected — shop: Alvi's store`. On the **web**
 target (`npx expo start --web`) the proof fails with a CORS "Failed to fetch"
 because the API only whitelists the Vercel origin — that's expected, not a bug.
