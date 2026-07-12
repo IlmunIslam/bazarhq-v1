@@ -1,12 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 
+import { AuthProvider } from '@/lib/auth';
+
 // Sprint 0 navigation skeleton: three top-level areas mirroring the web app
-// (Customer storefront, Merchant dashboard, Superadmin). Screens are empty
-// placeholders for now — only routing is wired here.
+// (Customer storefront, Merchant dashboard, Superadmin). AuthProvider (Sprint 1)
+// wraps the tabs so merchant auth state is restored on launch and shared across
+// screens. Customer/admin auth are not wired yet.
 export default function RootLayout() {
   return (
-    <Tabs screenOptions={{ tabBarActiveTintColor: '#0f172a' }}>
+    <AuthProvider>
+      <Tabs screenOptions={{ tabBarActiveTintColor: '#0f172a' }}>
       <Tabs.Screen
         name="index"
         options={{
@@ -34,6 +38,7 @@ export default function RootLayout() {
           ),
         }}
       />
-    </Tabs>
+      </Tabs>
+    </AuthProvider>
   );
 }
