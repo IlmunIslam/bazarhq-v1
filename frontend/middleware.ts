@@ -3,20 +3,31 @@ import type { NextRequest } from 'next/server';
 
 const MAIN_DOMAIN = process.env.NEXT_PUBLIC_DOMAIN ?? 'bazarhq.com';
 
+// First-party app routes that must NEVER be rewritten to a storefront, even when
+// a ?_shop= param or _dev_shop cookie is present. Storefront selection applies
+// only to the public shopping surface — not to the marketplace, the merchant
+// dashboard, auth, or superadmin. The (auth) route group has no URL prefix, so
+// its pages appear here by their real paths (/login, /register, …).
+const FIRST_PARTY_PREFIXES = [
+  '/marketplace',       // cross-shop marketplace section (M2+)
+  '/dashboard',
+  '/login',
+  '/register',
+  '/forgot-password',
+  '/verify-email',
+  '/reset-password',
+  '/superadmin',
+];
+
 export function middleware(request: NextRequest) {
   const host = request.headers.get('host') ?? '';
   const { pathname } = request.nextUrl;
 
-  // Skip rewrites for dashboard and auth routes (route-group prefix (auth) is not part of the URL)
-  if (
-    pathname.startsWith('/dashboard') ||
-    pathname.startsWith('/login') ||
-    pathname.startsWith('/register') ||
-    pathname.startsWith('/forgot-password') ||
-    pathname.startsWith('/verify-email') ||
-    pathname.startsWith('/reset-password') ||
-    pathname.startsWith('/superadmin')
-  ) {
+  // First-party app routes are never rewritten to a storefront — and crucially
+  // the _shop param / _dev_shop cookie logic below is never even consulted for
+  // them, so a sticky cookie can't hijack /marketplace, the dashboard, auth, or
+  // superadmin. Storefront selection resumes for every other path.
+  if (FIRST_PARTY_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
     return NextResponse.next();
   }
 
