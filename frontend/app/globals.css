@@ -3080,3 +3080,120 @@ a { color: inherit; }
 @media (prefers-reduced-motion: reduce) {
   .mk-card-skeleton-line, .mk-shop-card, .mk-product-card { animation: none; transition: none; }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   LANDING PAGE (root "/" front door — additive, Sprint M3)
+   Static, instant-render. Same minimal #111827-on-white system as the
+   storefront and marketplace. Two equally-weighted CTAs for both sides.
+══════════════════════════════════════════════════════════════ */
+
+.lp-root {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  color: #111827;
+}
+.lp-container { width: 100%; max-width: 1080px; margin: 0 auto; padding: 0 1.5rem; }
+
+/* ── Header ─────────────────────────────────────────────── */
+.lp-header { border-bottom: 1px solid #f1f1f2; }
+.lp-header-inner {
+  display: flex; align-items: center; justify-content: space-between;
+  height: 64px; gap: 1rem;
+}
+.lp-brand {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  font-size: 1.125rem; font-weight: 800; letter-spacing: -.02em; color: #111827;
+}
+.lp-brand-mark {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 8px;
+  background: #111827; color: #fff; font-size: 0.9375rem; font-weight: 800;
+}
+.lp-header-nav { display: flex; align-items: center; gap: 1.25rem; }
+.lp-header-link {
+  font-size: 0.9375rem; font-weight: 500; color: #4b5563; text-decoration: none;
+  transition: color .15s;
+}
+.lp-header-link:hover { color: #111827; }
+
+/* ── Buttons ────────────────────────────────────────────── */
+.lp-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  font-weight: 600; text-decoration: none; border-radius: 12px;
+  transition: transform .15s, box-shadow .15s, background .15s, border-color .15s;
+  cursor: pointer; white-space: nowrap;
+}
+.lp-btn-sm { padding: 0.5rem 0.875rem; font-size: 0.875rem; border-radius: 10px; }
+.lp-btn-lg { padding: 0.875rem 1.75rem; font-size: 1rem; }
+.lp-btn-primary { background: #111827; color: #fff; border: 1px solid #111827; }
+.lp-btn-primary:hover { background: #1f2937; box-shadow: 0 12px 24px -12px rgba(17,24,39,.55); }
+.lp-btn-primary:active { transform: translateY(1px); }
+.lp-btn-secondary { background: #fff; color: #111827; border: 1px solid #d1d5db; }
+.lp-btn-secondary:hover { border-color: #111827; box-shadow: 0 10px 22px -14px rgba(17,24,39,.3); }
+.lp-btn-secondary:active { transform: translateY(1px); }
+
+/* ── Hero ───────────────────────────────────────────────── */
+.lp-hero {
+  padding: clamp(3.5rem, 9vw, 6.5rem) 0 clamp(3rem, 7vw, 5rem);
+  background: linear-gradient(180deg, #fafafa 0%, #fff 100%);
+  border-bottom: 1px solid #f1f1f2;
+}
+.lp-eyebrow {
+  font-size: 0.8125rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: #6b7280; margin-bottom: 1rem;
+}
+.lp-hero-title {
+  font-size: clamp(2.25rem, 6vw, 3.75rem);
+  font-weight: 800; letter-spacing: -.03em; line-height: 1.05; color: #111827;
+}
+.lp-hero-sub {
+  margin-top: 1.25rem; max-width: 42ch;
+  font-size: clamp(1rem, 2vw, 1.1875rem); line-height: 1.6; color: #4b5563;
+}
+.lp-hero-ctas { margin-top: 2rem; display: flex; flex-wrap: wrap; gap: 0.875rem; }
+
+/* ── Dual value props ───────────────────────────────────── */
+.lp-dual {
+  padding: clamp(3rem, 7vw, 5rem) 1.5rem;
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem;
+}
+.lp-card {
+  border: 1px solid #ececed; border-radius: 18px;
+  padding: 2rem; background: #fff;
+  display: flex; flex-direction: column;
+}
+.lp-card-tag {
+  align-self: flex-start;
+  font-size: 0.75rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  color: #6b7280; background: #f4f4f5; padding: 0.25rem 0.625rem; border-radius: 999px;
+  margin-bottom: 1rem;
+}
+.lp-card-title { font-size: 1.5rem; font-weight: 700; letter-spacing: -.02em; color: #111827; }
+.lp-card-text { margin-top: 0.75rem; font-size: 0.9375rem; line-height: 1.65; color: #4b5563; flex: 1; }
+.lp-card-link {
+  margin-top: 1.5rem; align-self: flex-start;
+  font-size: 0.9375rem; font-weight: 600; color: #111827; text-decoration: none;
+  transition: gap .15s, opacity .15s;
+}
+.lp-card-link:hover { opacity: .6; }
+
+/* ── Footer ─────────────────────────────────────────────── */
+.lp-footer { margin-top: auto; border-top: 1px solid #f1f1f2; padding: 1.75rem 0; }
+.lp-footer-inner {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+}
+.lp-brand-sm { font-size: 1rem; }
+.lp-footer-note { font-size: 0.8125rem; color: #9ca3af; }
+
+/* ── Responsive ─────────────────────────────────────────── */
+@media (max-width: 720px) {
+  .lp-dual { grid-template-columns: 1fr; gap: 1rem; }
+  .lp-hero-ctas .lp-btn { flex: 1; }
+  .lp-header-link { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-btn { transition: none; }
+}
