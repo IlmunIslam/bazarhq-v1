@@ -23,6 +23,7 @@ import accountRoutes from './routes/account';
 import storefrontRoutes from './routes/storefront';
 import customerRoutes from './routes/customer';
 import adminRoutes from './routes/admin';
+import marketplaceRoutes from './routes/marketplace';
 
 // Fail fast on a missing or malformed database connection string. Without this,
 // Prisma only surfaces the problem on the first query — as a process crash and an
@@ -101,6 +102,7 @@ app.use('/v1/account', accountRoutes);
 app.use('/v1/storefront', storefrontRoutes);
 app.use('/v1/customer', customerRoutes);
 app.use('/v1/admin', adminRoutes);
+app.use('/v1/marketplace', marketplaceRoutes);
 
 // Global error handler — catches multer/busboy errors and any unhandled next(err)
 app.use((err: Error & { code?: string }, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
