@@ -1,10 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { useCart } from '../_components/StorefrontShell';
+import { useCart, useShop } from '../_components/StorefrontShell';
+import { shopHref } from '../_components/shop-href';
 
 export default function CartPage() {
   const { items, total, update, remove, clear } = useCart();
+  const { subdomain } = useShop();
 
   if (items.length === 0) {
     return (
@@ -16,7 +18,7 @@ export default function CartPage() {
         </svg>
         <p className="sf-empty-title">Your cart is empty</p>
         <p className="sf-empty-sub">Browse the store and add something you like.</p>
-        <Link href="/" className="sf-empty-cta">Continue shopping</Link>
+        <Link href={shopHref('/', subdomain)} className="sf-empty-cta">Continue shopping</Link>
       </div>
     );
   }
@@ -39,7 +41,7 @@ export default function CartPage() {
               </div>
 
               <div className="sf-cart-item-info">
-                <Link href={`/products/${item.slug}`} className="sf-cart-item-name">
+                <Link href={shopHref(`/products/${item.slug}`, subdomain)} className="sf-cart-item-name">
                   {item.name}
                 </Link>
                 {item.variantName && (
@@ -88,10 +90,10 @@ export default function CartPage() {
             <span>Total</span>
             <span>৳{total.toLocaleString()}</span>
           </div>
-          <Link href="/checkout" className="sf-checkout-btn" style={{ textAlign: 'center', display: 'block', textDecoration: 'none' }}>
+          <Link href={shopHref('/checkout', subdomain)} className="sf-checkout-btn" style={{ textAlign: 'center', display: 'block', textDecoration: 'none' }}>
             Proceed to Checkout
           </Link>
-          <Link href="/" className="sf-back-link sf-cart-continue">← Continue shopping</Link>
+          <Link href={shopHref('/', subdomain)} className="sf-back-link sf-cart-continue">← Continue shopping</Link>
         </div>
       </div>
     </div>

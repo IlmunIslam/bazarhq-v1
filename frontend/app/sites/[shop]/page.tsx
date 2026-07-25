@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useShop } from './_components/StorefrontShell';
+import { shopHref } from './_components/shop-href';
 
 interface ProductImage { url: string; }
 interface Product {
@@ -75,6 +76,7 @@ function StorefrontHomeContent() {
     const params = new URLSearchParams(searchParams.toString());
     if (slug) params.set('category', slug);
     else params.delete('category');
+    params.set('_shop', subdomain);
     router.push(`/?${params}`);
   };
 
@@ -166,7 +168,7 @@ function StorefrontHomeContent() {
                 return (
                   <Link
                     key={p.id}
-                    href={`/products/${p.slug}`}
+                    href={shopHref(`/products/${p.slug}`, subdomain)}
                     className={`sf-product-card${soldOut ? ' sf-product-card--oos' : ''}`}
                     style={{ animationDelay: `${Math.min(i, 11) * 45}ms` }}
                   >

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useShop, useCart } from '../_components/StorefrontShell';
+import { shopHref } from '../_components/shop-href';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/v1';
 
@@ -64,7 +65,7 @@ export default function CheckoutPage() {
         </svg>
         <p className="sf-empty-title">Your cart is empty</p>
         <p className="sf-empty-sub">Add items to your cart before checking out.</p>
-        <Link href="/" className="sf-empty-cta">Start shopping</Link>
+        <Link href={shopHref('/', subdomain)} className="sf-empty-cta">Start shopping</Link>
       </div>
     );
   }
@@ -122,7 +123,7 @@ export default function CheckoutPage() {
       const json = await res.json();
       if (json.success) {
         clear();
-        router.push(`/order-confirmation/${json.data.order.orderNumber}?phone=${encodeURIComponent(delivery.customerPhone)}`);
+        router.push(shopHref(`/order-confirmation/${json.data.order.orderNumber}?phone=${encodeURIComponent(delivery.customerPhone)}`, subdomain));
       } else {
         setErrors({ submit: json.error?.message ?? 'Failed to place order. Please try again.' });
         setSubmitting(false);
@@ -203,7 +204,7 @@ export default function CheckoutPage() {
             </div>
 
             <div className="sf-checkout-nav">
-              <Link href="/cart" className="sf-back-link">← Back to cart</Link>
+              <Link href={shopHref('/cart', subdomain)} className="sf-back-link">← Back to cart</Link>
               <button className="sf-checkout-next-btn" onClick={() => { if (validateStep1()) setStep(2); }}>
                 Continue to Payment →
               </button>

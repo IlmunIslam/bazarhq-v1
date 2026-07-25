@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useParams } from 'next/navigation';
 import Link from 'next/link';
+import { shopHref } from '../_components/shop-href';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/v1';
 
@@ -49,6 +50,7 @@ interface Order {
 
 function TrackPageInner() {
   const searchParams = useSearchParams();
+  const subdomain = useParams<{ shop: string }>().shop;
 
   const [orderNumber, setOrderNumber] = useState(searchParams.get('orderNumber') ?? '');
   const [phone, setPhone] = useState('');
@@ -216,7 +218,7 @@ function TrackPageInner() {
       )}
 
       <div style={{ marginTop: '2rem', textAlign: 'center' }}>
-        <Link href="/" className="sf-back-link">← Back to shop</Link>
+        <Link href={shopHref('/', subdomain)} className="sf-back-link">← Back to shop</Link>
       </div>
     </div>
   );

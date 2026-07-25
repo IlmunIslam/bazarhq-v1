@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api-client';
+import { useShop } from '../_components/StorefrontShell';
+import { shopHref } from '../_components/shop-href';
 
 interface OrderItem {
   productName: string;
@@ -47,6 +49,7 @@ function fmt(n: number) {
 
 export default function CustomerAccountPage() {
   const router = useRouter();
+  const { subdomain } = useShop();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [customerName, setCustomerName] = useState('');
@@ -57,18 +60,18 @@ export default function CustomerAccountPage() {
       api.get<{ orders: Order[] }>('/customer/orders'),
     ]).then(([meRes, ordersRes]) => {
       if (!meRes.success) {
-        router.replace('./login');
+        router.replace(shopHref('/account/login', subdomain));
         return;
       }
       setCustomerName(meRes.data.customer.name);
       if (ordersRes.success) setOrders(ordersRes.data.orders);
       setLoading(false);
     });
-  }, [router]);
+  }, [router, subdomain]);
 
   const handleLogout = async () => {
     await api.post('/customer/auth/logout', {});
-    router.replace('./login');
+    router.replace(shopHref('/account/login', subdomain));
   };
 
   if (loading) {
@@ -99,7 +102,7 @@ export default function CustomerAccountPage() {
       {orders.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#6b7280' }}>
           <p>No orders yet.</p>
-          <Link href="/" style={{ display: 'inline-block', marginTop: '1rem', fontSize: '0.875rem', color: 'var(--sf-primary)' }}>
+          <Link href={shopHref('/', subdomain)} style={{ display: 'inline-block', marginTop: '1rem', fontSize: '0.875rem', color: 'var(--sf-primary)' }}>
             Start shopping →
           </Link>
         </div>
@@ -145,7 +148,7 @@ export default function CustomerAccountPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <span style={{ fontWeight: 700, fontSize: '1rem' }}>৳{fmt(order.total)}</span>
                 <Link
-                  href={`/track?orderNumber=${order.orderNumber}`}
+                  href={shopHref(`/track?orderNumber=${order.orderNumber}`, subdomain)}
                   style={{ fontSize: '0.8125rem', color: 'var(--sf-primary)', textDecoration: 'underline' }}
                 >
                   Track order →

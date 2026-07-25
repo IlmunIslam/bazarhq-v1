@@ -3,9 +3,12 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api-client';
+import { useShop } from '../../_components/StorefrontShell';
+import { shopHref } from '../../_components/shop-href';
 
 export default function CustomerLoginPage() {
   const router = useRouter();
+  const { subdomain } = useShop();
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -21,7 +24,7 @@ export default function CustomerLoginPage() {
     );
 
     if (res.success) {
-      router.push('./orders');
+      router.push(shopHref('/account', subdomain));
     } else {
       setError(res.error?.message ?? 'Login failed');
     }
@@ -74,7 +77,7 @@ export default function CustomerLoginPage() {
         </form>
 
         <p style={{ fontSize: '0.8125rem', color: '#9ca3af', marginTop: '1rem', textAlign: 'center' }}>
-          You can also <a href="../track" style={{ color: 'var(--sf-primary)' }}>track a specific order</a> by order number.
+          You can also <a href={shopHref('/track', subdomain)} style={{ color: 'var(--sf-primary)' }}>track a specific order</a> by order number.
         </p>
       </div>
     </div>

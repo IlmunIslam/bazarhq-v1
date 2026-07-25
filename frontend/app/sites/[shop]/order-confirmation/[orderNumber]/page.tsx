@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { shopHref } from '../../_components/shop-href';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/v1';
 
@@ -50,9 +51,10 @@ interface Order {
 }
 
 function OrderConfirmationInner() {
-  const params = useParams<{ orderNumber: string }>();
+  const params = useParams<{ shop: string; orderNumber: string }>();
   const searchParams = useSearchParams();
   const phone = searchParams.get('phone') ?? '';
+  const subdomain = params.shop;
 
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
@@ -86,7 +88,7 @@ function OrderConfirmationInner() {
     return (
       <div className="sf-container sf-empty" style={{ paddingTop: '3rem' }}>
         <p>{error || 'Order not found.'}</p>
-        <Link href="/" className="sf-back-link">← Back to shop</Link>
+        <Link href={shopHref('/', subdomain)} className="sf-back-link">← Back to shop</Link>
       </div>
     );
   }
@@ -157,7 +159,7 @@ function OrderConfirmationInner() {
       </div>
 
       <div style={{ textAlign: 'center', marginTop: '2rem' }}>
-        <Link href="/" className="sf-checkout-next-btn">Continue Shopping</Link>
+        <Link href={shopHref('/', subdomain)} className="sf-checkout-next-btn">Continue Shopping</Link>
       </div>
     </div>
   );

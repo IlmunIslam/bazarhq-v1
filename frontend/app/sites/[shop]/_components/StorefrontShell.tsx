@@ -6,6 +6,7 @@ import {
   getCart, addToCart, updateQuantity, removeFromCart, clearCart,
   type CartItem,
 } from '@/lib/cart';
+import { shopHref } from './shop-href';
 
 // ─── Shop context (read-only data from server) ────────────────────────────────
 
@@ -113,7 +114,7 @@ export default function StorefrontShell({ shop, theme, categories, subdomain, pa
         >
           <header className="sf-header">
             <div className="sf-container sf-header-inner">
-              <Link href="/" className="sf-brand">
+              <Link href={shopHref('/', subdomain)} className="sf-brand">
                 {shop.logoUrl
                   ? <img src={shop.logoUrl} alt={shop.name} className="sf-logo" />
                   : <span className="sf-brand-name">{shop.name}</span>
@@ -121,19 +122,19 @@ export default function StorefrontShell({ shop, theme, categories, subdomain, pa
               </Link>
 
               <nav className="sf-nav">
-                <Link href="/" className="sf-nav-link">All</Link>
+                <Link href={shopHref('/', subdomain)} className="sf-nav-link">All</Link>
                 {categories.map(cat => (
-                  <Link key={cat.id} href={`/?category=${cat.slug}`} className="sf-nav-link">
+                  <Link key={cat.id} href={shopHref(`/?category=${cat.slug}`, subdomain)} className="sf-nav-link">
                     {cat.name}
                   </Link>
                 ))}
               </nav>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <Link href="/account" className="sf-nav-link" style={{ fontSize: '0.875rem' }}>
+                <Link href={shopHref('/account', subdomain)} className="sf-nav-link" style={{ fontSize: '0.875rem' }}>
                   My Orders
                 </Link>
-                <Link href="/cart" className="sf-cart-link">
+                <Link href={shopHref('/cart', subdomain)} className="sf-cart-link">
                   Cart{count > 0 && <span className="sf-cart-badge">{count}</span>}
                 </Link>
               </div>
@@ -145,7 +146,7 @@ export default function StorefrontShell({ shop, theme, categories, subdomain, pa
           <footer className="sf-footer">
             <div className="sf-container sf-footer-inner">
               <p>© {new Date().getFullYear()} {shop.name} · Powered by BazarHQ</p>
-              <Link href="/track" className="sf-footer-track-link">Track Order</Link>
+              <Link href={shopHref('/track', subdomain)} className="sf-footer-track-link">Track Order</Link>
             </div>
           </footer>
         </div>

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useShop, useCart } from '../../_components/StorefrontShell';
+import { shopHref } from '../../_components/shop-href';
 
 interface ProductImage { id: string; url: string; position: number; }
 interface Variant {
@@ -76,7 +77,7 @@ export default function ProductDetailPage() {
     return (
       <div className="sf-container sf-empty" style={{ paddingTop: '4rem' }}>
         <p>Product not found.</p>
-        <Link href="/" className="sf-back-link">← Back to store</Link>
+        <Link href={shopHref('/', subdomain)} className="sf-back-link">← Back to store</Link>
       </div>
     );
   }
@@ -109,7 +110,7 @@ export default function ProductDetailPage() {
     <div className="sf-container sf-product-detail">
       {/* Breadcrumb */}
       <nav className="sf-breadcrumb">
-        <Link href="/" className="sf-breadcrumb-link">Home</Link>
+        <Link href={shopHref('/', subdomain)} className="sf-breadcrumb-link">Home</Link>
         <span className="sf-breadcrumb-sep">›</span>
         <span>{product.name}</span>
       </nav>
