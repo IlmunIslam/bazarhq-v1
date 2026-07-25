@@ -35,3 +35,6 @@ screenshots/
 
 # TypeScript incremental build info (machine-generated)
 *.tsbuildinfo
+
+# Local reference material (personal screenshots, not project assets)
+Reference/
