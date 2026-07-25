@@ -59,7 +59,11 @@
       "Bash(rm src/app/index.tsx)",
       "Bash(mkdir -p \"src/app/\\(customer\\)/product\")",
       "Bash(grep -o '`/[^`]*`' .expo/types/router.d.ts)",
-      "Bash(pkill -f \"expo start\")"
+      "Bash(pkill -f \"expo start\")",
+      "Read(//c/Users/ilmun/.claude/skills/ui-ux-pro-max/**)",
+      "Bash(python scripts/search.py \"multi-tenant e-commerce marketplace browse product grid clean minimal\" --design-system -p \"BazarHQ Marketplace\")",
+      "mcp__playwright__browser_resize",
+      "Bash(kill %bysfzfoc4)"
     ]
   }
 }
