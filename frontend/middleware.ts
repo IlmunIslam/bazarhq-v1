@@ -47,9 +47,13 @@ export function middleware(request: NextRequest) {
     response.cookies.set('_dev_shop', subdomain, { path: '/', sameSite: 'lax' });
     return response;
   }
-  // Use cookie set by a previous ?_shop= visit
+  // Cookie-based storefront context applies to storefront SUB-paths only
+  // (product pages, cart, checkout, …) — NEVER to the bare root. The apex
+  // root "/" always renders the BazarHQ landing page, even for a visitor who
+  // viewed a shop earlier this session. Explicit ?_shop= (handled above)
+  // still selects a storefront on any path, including "/".
   const cookieShop = request.cookies.get('_dev_shop')?.value;
-  if (cookieShop) subdomain = cookieShop;
+  if (cookieShop && pathname !== '/') subdomain = cookieShop;
 
   if (!subdomain) {
     const hostname = host.split(':')[0]; // strip port
