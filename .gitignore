@@ -32,3 +32,6 @@ npm-debug.log*
 .playwright-mcp/
 /*.png
 screenshots/
+
+# TypeScript incremental build info (machine-generated)
+*.tsbuildinfo
