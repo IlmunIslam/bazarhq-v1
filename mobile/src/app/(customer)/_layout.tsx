@@ -1,11 +1,9 @@
-import { Ionicons } from '@expo/vector-icons';
-import { Link, Stack } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Stack } from 'expo-router';
 
-import { useCart } from '@/lib/cart-context';
-
-// Nested stack for the Customer tab: product list → product detail → cart.
-// A cart button with a live item-count badge sits in every screen's header.
+// Customer tab stack: the marketplace at the root, and a per-shop storefront
+// stack pushed on top. The shop route hides ITS header here (headerShown:false)
+// so the nested stack (shop/[subdomain]/_layout) owns the shop headers and the
+// shop-scoped cart button.
 export default function CustomerStackLayout() {
   return (
     <Stack
@@ -13,50 +11,10 @@ export default function CustomerStackLayout() {
         headerTintColor: '#0f172a',
         headerTitleStyle: { fontWeight: '700', color: '#0f172a' },
         headerShadowVisible: false,
-        headerRight: () => <CartButton />,
       }}
     >
-      <Stack.Screen name="index" options={{ title: 'Store' }} />
-      <Stack.Screen name="product/[slug]" options={{ title: '' }} />
-      <Stack.Screen name="cart" options={{ title: 'Your Cart', headerRight: undefined }} />
+      <Stack.Screen name="index" options={{ title: 'Marketplace' }} />
+      <Stack.Screen name="shop/[subdomain]" options={{ headerShown: false }} />
     </Stack>
   );
 }
-
-function CartButton() {
-  const { count } = useCart();
-  return (
-    <Link href="/cart" asChild>
-      <Pressable
-        style={styles.cartButton}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel="View cart"
-      >
-        <Ionicons name="cart-outline" size={24} color="#0f172a" />
-        {count > 0 && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{count > 99 ? '99+' : count}</Text>
-          </View>
-        )}
-      </Pressable>
-    </Link>
-  );
-}
-
-const styles = StyleSheet.create({
-  cartButton: { paddingHorizontal: 4, paddingVertical: 2 },
-  badge: {
-    position: 'absolute',
-    top: -4,
-    right: -6,
-    minWidth: 18,
-    height: 18,
-    paddingHorizontal: 4,
-    borderRadius: 9,
-    backgroundColor: '#0f172a',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badgeText: { color: '#ffffff', fontSize: 11, fontWeight: '700' },
-});

@@ -12,12 +12,11 @@ import {
 
 import { api } from '@/lib/api-client';
 import { useCart } from '@/lib/cart-context';
-import { ACTIVE_SHOP } from '@/lib/shop';
 
-// Mirrors the web product detail page
-// (frontend/app/sites/[shop]/products/[slug]/page.tsx): image gallery, variant
-// selector (first variant preselected, sold-out disabled), quantity stepper
-// clamped to stock, and add-to-cart. compareAt applies only to the base price.
+// One product's detail (Sprint 2), scoped to the :subdomain route param. Image
+// gallery, variant selector (first preselected, sold-out disabled), quantity
+// stepper clamped to stock, add-to-cart into this shop's cart. compareAt applies
+// only to the base price.
 
 interface ProductImage {
   id: string;
@@ -43,7 +42,7 @@ interface ProductDetail {
 }
 
 export default function ProductDetailScreen() {
-  const { slug } = useLocalSearchParams<{ slug: string }>();
+  const { subdomain, slug } = useLocalSearchParams<{ subdomain: string; slug: string }>();
   const { add } = useCart();
 
   const [product, setProduct] = useState<ProductDetail | null>(null);
@@ -59,7 +58,7 @@ export default function ProductDetailScreen() {
     let active = true;
     setLoading(true);
     api
-      .get<{ product: ProductDetail }>(`/storefront/${ACTIVE_SHOP}/products/${slug}`)
+      .get<{ product: ProductDetail }>(`/storefront/${subdomain}/products/${slug}`)
       .then(res => {
         if (!active) return;
         if (res.success) {
@@ -76,7 +75,7 @@ export default function ProductDetailScreen() {
     return () => {
       active = false;
     };
-  }, [slug]);
+  }, [subdomain, slug]);
 
   if (loading) {
     return (

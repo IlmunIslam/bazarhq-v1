@@ -1,6 +1,6 @@
 import { StackActions } from '@react-navigation/native';
 import { Image } from 'expo-image';
-import { Link, useNavigation } from 'expo-router';
+import { Link, useLocalSearchParams, useNavigation } from 'expo-router';
 import {
   Pressable,
   ScrollView,
@@ -11,15 +11,16 @@ import {
 
 import { useCart } from '@/lib/cart-context';
 
-// Mirrors the web cart (frontend/app/sites/[shop]/cart/page.tsx): line items
-// with qty controls + remove, clear-cart, and an order summary. Checkout is out
-// of scope for Sprint 2, so the summary ends at a disabled "coming soon" note
-// where web has "Proceed to Checkout".
+// This shop's cart (Sprint 2): line items with qty controls + remove, clear-cart,
+// and an order summary. Reads the shop-scoped CartProvider — no shop id needed
+// here except to deep-link cart items back into this shop's product detail.
+// Checkout is still out of scope, so the summary ends at a disabled note.
 
 export default function CartScreen() {
+  const { subdomain } = useLocalSearchParams<{ subdomain: string }>();
   const { items, total, update, remove, clear } = useCart();
   const navigation = useNavigation();
-  // Return to the list at the stack root — the "continue shopping" action.
+  // Return to the shop storefront at the stack root — "continue shopping".
   const goToStore = () => navigation.dispatch(StackActions.popToTop());
 
   if (items.length === 0) {
@@ -48,7 +49,7 @@ export default function CartScreen() {
 
           <View style={styles.itemInfo}>
             <Link
-              href={{ pathname: '/product/[slug]', params: { slug: item.slug } }}
+              href={{ pathname: '/shop/[subdomain]/product/[slug]', params: { subdomain, slug: item.slug } }}
               style={styles.itemName}
               numberOfLines={2}
             >

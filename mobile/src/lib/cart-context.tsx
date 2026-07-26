@@ -16,13 +16,13 @@ import {
   updateQuantity,
   type CartItem,
 } from './cart';
-import { ACTIVE_SHOP } from './shop';
 
-// Cart state shared across the customer stack (list / detail / cart screens),
-// plus the header badge. Web keeps this in StorefrontShell; mobile has no shared
-// storefront layout, so a small provider mounted at the app root plays that
-// role. State is persisted to AsyncStorage (see lib/cart) and restored on
-// launch, namespaced by the active shop's subdomain.
+// Cart state shared across one shop's stack (storefront / detail / cart screens),
+// plus the header badge. Web keeps this in StorefrontShell, keyed by subdomain;
+// mobile mirrors that with a provider mounted in the per-shop layout
+// (app/(customer)/shop/[subdomain]/_layout). Each shop gets its own provider
+// instance, so state is persisted to AsyncStorage under `cart_${subdomain}` and
+// every shop keeps a fully separate cart automatically (Option A).
 
 interface CartContextValue {
   items: CartItem[];
@@ -37,14 +37,16 @@ interface CartContextValue {
 
 const CartContext = createContext<CartContextValue | null>(null);
 
-export function CartProvider({ children }: { children: ReactNode }) {
+export function CartProvider({ subdomain, children }: { subdomain: string; children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [ready, setReady] = useState(false);
 
-  // Restore the persisted cart on launch.
+  // Restore the persisted cart for THIS shop. Keyed on subdomain so that if the
+  // provider is ever reused across shops, it reloads the correct cart.
   useEffect(() => {
     let active = true;
-    getCart(ACTIVE_SHOP).then(stored => {
+    setReady(false);
+    getCart(subdomain).then(stored => {
       if (!active) return;
       setItems(stored);
       setReady(true);
@@ -52,27 +54,27 @@ export function CartProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [subdomain]);
 
   const add = useCallback(async (item: CartItem) => {
-    setItems(await addToCart(ACTIVE_SHOP, item));
-  }, []);
+    setItems(await addToCart(subdomain, item));
+  }, [subdomain]);
 
   const update = useCallback(
     async (productId: string, variantId: string | undefined, qty: number) => {
-      setItems(await updateQuantity(ACTIVE_SHOP, productId, variantId, qty));
+      setItems(await updateQuantity(subdomain, productId, variantId, qty));
     },
-    [],
+    [subdomain],
   );
 
   const remove = useCallback(async (productId: string, variantId?: string) => {
-    setItems(await removeFromCart(ACTIVE_SHOP, productId, variantId));
-  }, []);
+    setItems(await removeFromCart(subdomain, productId, variantId));
+  }, [subdomain]);
 
   const clear = useCallback(async () => {
-    await clearCart(ACTIVE_SHOP);
+    await clearCart(subdomain);
     setItems([]);
-  }, []);
+  }, [subdomain]);
 
   const count = items.reduce((s, i) => s + i.quantity, 0);
   const total = items.reduce((s, i) => s + i.price * i.quantity, 0);
