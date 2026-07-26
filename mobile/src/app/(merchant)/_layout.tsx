@@ -18,6 +18,8 @@ export default function MerchantStackLayout() {
       <Stack.Screen name="products" options={{ title: 'Products' }} />
       <Stack.Screen name="products/new" options={{ title: 'Add product' }} />
       <Stack.Screen name="products/edit/[id]" options={{ title: 'Edit product' }} />
+      <Stack.Screen name="orders" options={{ title: 'Orders' }} />
+      <Stack.Screen name="orders/[id]" options={{ title: 'Order' }} />
     </Stack>
   );
 }
