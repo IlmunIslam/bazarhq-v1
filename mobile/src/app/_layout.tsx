@@ -24,9 +24,10 @@ export default function RootLayout() {
           }}
         />
         <Tabs.Screen
-          name="merchant"
+          name="(merchant)"
           options={{
             title: 'Merchant',
+            headerShown: false,
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="briefcase-outline" size={size} color={color} />
             ),
