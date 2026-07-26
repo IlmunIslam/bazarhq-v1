@@ -228,6 +228,7 @@ function Dashboard() {
             onViewStore={() =>
               router.push({ pathname: '/store-preview/[subdomain]', params: { subdomain: shop.subdomain } })
             }
+            onManageProducts={() => router.push('/products')}
           />
         )}
 
@@ -253,12 +254,14 @@ function StoreOverview({
   publishError,
   onPublish,
   onViewStore,
+  onManageProducts,
 }: {
   shop: ShopOverview;
   publishing: boolean;
   publishError: string;
   onPublish: () => void;
   onViewStore: () => void;
+  onManageProducts: () => void;
 }) {
   const isPublished = shop.status === 'published';
 
@@ -288,6 +291,12 @@ function StoreOverview({
           <Text style={styles.statLabel}>Total orders</Text>
         </View>
       </View>
+
+      {/* Manage products */}
+      <Pressable style={[styles.button, styles.viewStoreBtn]} onPress={onManageProducts}>
+        <Ionicons name="pricetags-outline" size={18} color="#0f172a" />
+        <Text style={styles.viewStoreText}>Manage products</Text>
+      </Pressable>
 
       {/* Publish / live state */}
       {isPublished ? (

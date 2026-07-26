@@ -248,7 +248,7 @@ function ProductCard({ product }: { product: MarketplaceProduct }) {
 
 function ShopCard({ shop }: { shop: MarketplaceShop }) {
   return (
-    <Link href={{ pathname: '/shop/[subdomain]/index', params: { subdomain: shop.subdomain } }} asChild>
+    <Link href={{ pathname: '/shop/[subdomain]', params: { subdomain: shop.subdomain } }} asChild>
       <Pressable style={styles.shopCard}>
         <View style={styles.shopLogoWrap}>
           {shop.logoUrl ? (

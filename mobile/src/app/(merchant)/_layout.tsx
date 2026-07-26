@@ -15,6 +15,9 @@ export default function MerchantStackLayout() {
     >
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="store-preview/[subdomain]" options={{ title: 'Store preview' }} />
+      <Stack.Screen name="products" options={{ title: 'Products' }} />
+      <Stack.Screen name="products/new" options={{ title: 'Add product' }} />
+      <Stack.Screen name="products/edit/[id]" options={{ title: 'Edit product' }} />
     </Stack>
   );
 }
