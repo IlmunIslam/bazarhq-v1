@@ -30,14 +30,30 @@ type AuthStatus = 'restoring' | 'authenticated' | 'unauthenticated';
 interface LoginResult {
   ok: boolean;
   message?: string;
+  code?: string;
+}
+
+interface RegisterResult {
+  ok: boolean;
+  message?: string;
 }
 
 interface AuthContextValue {
   status: AuthStatus;
   merchant: Merchant | null;
   shop: Shop | null;
+  // A one-off notice + pre-filled email shown on the login screen — used after
+  // store creation, which rotates the session (see beginReauth).
+  notice: string | null;
+  prefillEmail: string | null;
   login: (email: string, password: string) => Promise<LoginResult>;
+  register: (fullName: string, email: string, phone: string, password: string) => Promise<RegisterResult>;
   logout: () => Promise<void>;
+  // Drop the current (now-revoked) token locally and return to the login screen
+  // with a notice + pre-filled email. POST /shops rotates the JWT and only hands
+  // the new one back via cookie, which native clients can't read, so the merchant
+  // signs in again to pick up a fresh Bearer token.
+  beginReauth: (email: string, notice: string) => Promise<void>;
 }
 
 // Shapes returned by the API (subset we read).
@@ -50,6 +66,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('restoring');
   const [merchant, setMerchant] = useState<Merchant | null>(null);
   const [shop, setShop] = useState<Shop | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [prefillEmail, setPrefillEmail] = useState<string | null>(null);
 
   const reset = useCallback(() => {
     setMerchant(null);
@@ -97,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       { email, password },
       MOBILE_CLIENT_HEADER,
     );
-    if (!res.success) return { ok: false, message: res.error.message };
+    if (!res.success) return { ok: false, message: res.error.message, code: res.error.code };
     if (!res.data.token) {
       return { ok: false, message: 'Login succeeded but no token was returned.' };
     }
@@ -114,8 +132,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setMerchant(res.data.user);
       setShop(null);
     }
+    setNotice(null);
+    setPrefillEmail(null);
     setStatus('authenticated');
     return { ok: true };
+  }, []);
+
+  const register = useCallback(
+    async (fullName: string, email: string, phone: string, password: string): Promise<RegisterResult> => {
+      const res = await api.post<{ message: string }>('/auth/register', {
+        fullName,
+        email,
+        phone: phone.trim() || undefined,
+        password,
+      });
+      if (!res.success) return { ok: false, message: res.error.message };
+      return { ok: true, message: res.data.message };
+    },
+    [],
+  );
+
+  const beginReauth = useCallback(async (email: string, msg: string) => {
+    // The session was already rotated server-side; just drop the dead token
+    // locally (no /auth/logout call) and surface the login screen.
+    await clearMerchantToken();
+    setMerchant(null);
+    setShop(null);
+    setPrefillEmail(email);
+    setNotice(msg);
+    setStatus('unauthenticated');
   }, []);
 
   const logout = useCallback(async () => {
@@ -131,7 +176,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [reset]);
 
   return (
-    <AuthContext.Provider value={{ status, merchant, shop, login, logout }}>
+    <AuthContext.Provider
+      value={{ status, merchant, shop, notice, prefillEmail, login, register, logout, beginReauth }}
+    >
       {children}
     </AuthContext.Provider>
   );

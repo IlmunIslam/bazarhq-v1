@@ -45,10 +45,12 @@ export default function MerchantScreen() {
 // ── Login ────────────────────────────────────────────────────────────────────
 
 function LoginForm() {
-  const { login } = useAuth();
-  const [email, setEmail] = useState('');
+  const { login, notice, prefillEmail } = useAuth();
+  const router = useRouter();
+  const [email, setEmail] = useState(prefillEmail ?? '');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [unverified, setUnverified] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const canSubmit = email.trim().length > 0 && password.length > 0 && !submitting;
@@ -57,9 +59,12 @@ function LoginForm() {
     if (!canSubmit) return;
     setSubmitting(true);
     setError('');
+    setUnverified(false);
     const res = await login(email.trim(), password);
     if (!res.ok) {
-      setError(res.message ?? 'Login failed. Please try again.');
+      // The verification gate gets its own clear state, not a generic error.
+      if (res.code === 'EMAIL_NOT_VERIFIED') setUnverified(true);
+      else setError(res.message ?? 'Login failed. Please try again.');
       setSubmitting(false);
     }
     // On success the provider flips status → the dashboard replaces this view.
@@ -74,6 +79,12 @@ function LoginForm() {
         <Text style={styles.kicker}>Merchant</Text>
         <Text style={styles.title}>Log in</Text>
         <Text style={styles.subtitle}>Use your BazarHQ merchant account.</Text>
+
+        {notice && (
+          <View style={styles.noticeBanner}>
+            <Text style={styles.noticeText}>{notice}</Text>
+          </View>
+        )}
 
         <View style={styles.field}>
           <Text style={styles.label}>Email</Text>
@@ -107,6 +118,13 @@ function LoginForm() {
           />
         </View>
 
+        {unverified && (
+          <View style={styles.unverifiedBanner}>
+            <Text style={styles.unverifiedText}>
+              Your email isn&apos;t verified yet. Please verify your account, then sign in.
+            </Text>
+          </View>
+        )}
         {error !== '' && <Text style={styles.error}>{error}</Text>}
 
         <Pressable
@@ -119,6 +137,11 @@ function LoginForm() {
           ) : (
             <Text style={styles.buttonText}>Log In</Text>
           )}
+        </Pressable>
+
+        <Pressable style={styles.registerRow} onPress={() => router.push('/register')} disabled={submitting}>
+          <Text style={styles.registerText}>New to BazarHQ? </Text>
+          <Text style={styles.registerLink}>Create an account</Text>
         </Pressable>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -213,9 +236,11 @@ function Dashboard() {
             <Ionicons name="storefront-outline" size={32} color="#9ca3af" style={styles.noStoreIcon} />
             <Text style={styles.cardValue}>No store yet</Text>
             <Text style={styles.muted}>
-              You haven&apos;t created a store. Store creation is coming to the app soon — for now you
-              can create one on the web dashboard.
+              Create your store to start adding products and taking orders. It only takes a minute.
             </Text>
+            <Pressable style={[styles.button, styles.createStoreBtn]} onPress={() => router.push('/create-store')}>
+              <Text style={styles.buttonText}>Create your store</Text>
+            </Pressable>
           </View>
         )}
 
@@ -410,6 +435,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#fafafa',
   },
   error: { fontSize: 14, fontWeight: '600', color: '#b91c1c', marginTop: 4 },
+
+  noticeBanner: { backgroundColor: '#ecfdf5', borderWidth: 1, borderColor: '#a7f3d0', borderRadius: 10, padding: 12, marginBottom: 14 },
+  noticeText: { fontSize: 14, color: '#047857', fontWeight: '600', lineHeight: 20 },
+  unverifiedBanner: { backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fde68a', borderRadius: 10, padding: 12, marginTop: 4, marginBottom: 4 },
+  unverifiedText: { fontSize: 14, color: '#b45309', fontWeight: '600', lineHeight: 20 },
+  registerRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 18 },
+  registerText: { fontSize: 14, color: '#6b7280' },
+  registerLink: { fontSize: 14, color: '#0f172a', fontWeight: '700' },
+  createStoreBtn: { alignSelf: 'stretch', marginTop: 12 },
 
   button: {
     backgroundColor: '#0f172a',
