@@ -63,7 +63,11 @@
       "Read(//c/Users/ilmun/.claude/skills/ui-ux-pro-max/**)",
       "Bash(python scripts/search.py \"multi-tenant e-commerce marketplace browse product grid clean minimal\" --design-system -p \"BazarHQ Marketplace\")",
       "mcp__playwright__browser_resize",
-      "Bash(kill %bysfzfoc4)"
+      "Bash(kill %bysfzfoc4)",
+      "Bash(rm -f \"src/app/\\(customer\\)/product/[slug].tsx\" \"src/app/\\(customer\\)/cart.tsx\" \"src/lib/shop.ts\")",
+      "Bash(rmdir \"src/app/\\(customer\\)/product\")",
+      "Bash(grep -oE \"\\\\`/[^\\\\`]*\\\\`\" .expo/types/router.d.ts)",
+      "Bash(grep -oE \"\\\\`/products[^\\\\`]*\\\\`\" .expo/types/router.d.ts)"
     ]
   }
 }
