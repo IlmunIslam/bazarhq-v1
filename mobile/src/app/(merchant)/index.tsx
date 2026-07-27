@@ -255,6 +255,9 @@ function Dashboard() {
             }
             onManageProducts={() => router.push('/products')}
             onManageOrders={() => router.push('/orders')}
+            onAnalytics={() => router.push('/analytics')}
+            onSettings={() => router.push('/settings')}
+            onAccount={() => router.push('/account')}
           />
         )}
 
@@ -282,6 +285,9 @@ function StoreOverview({
   onViewStore,
   onManageProducts,
   onManageOrders,
+  onAnalytics,
+  onSettings,
+  onAccount,
 }: {
   shop: ShopOverview;
   publishing: boolean;
@@ -290,6 +296,9 @@ function StoreOverview({
   onViewStore: () => void;
   onManageProducts: () => void;
   onManageOrders: () => void;
+  onAnalytics: () => void;
+  onSettings: () => void;
+  onAccount: () => void;
 }) {
   const isPublished = shop.status === 'published';
 
@@ -330,6 +339,24 @@ function StoreOverview({
       <Pressable style={[styles.button, styles.viewStoreBtn]} onPress={onManageOrders}>
         <Ionicons name="receipt-outline" size={18} color="#0f172a" />
         <Text style={styles.viewStoreText}>Manage orders</Text>
+      </Pressable>
+
+      {/* Analytics */}
+      <Pressable style={[styles.button, styles.viewStoreBtn]} onPress={onAnalytics}>
+        <Ionicons name="bar-chart-outline" size={18} color="#0f172a" />
+        <Text style={styles.viewStoreText}>Analytics</Text>
+      </Pressable>
+
+      {/* Settings */}
+      <Pressable style={[styles.button, styles.viewStoreBtn]} onPress={onSettings}>
+        <Ionicons name="settings-outline" size={18} color="#0f172a" />
+        <Text style={styles.viewStoreText}>Settings</Text>
+      </Pressable>
+
+      {/* Account */}
+      <Pressable style={[styles.button, styles.viewStoreBtn]} onPress={onAccount}>
+        <Ionicons name="person-outline" size={18} color="#0f172a" />
+        <Text style={styles.viewStoreText}>Account</Text>
       </Pressable>
 
       {/* Publish / live state */}
