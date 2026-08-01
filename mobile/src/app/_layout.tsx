@@ -9,6 +9,10 @@ import { AuthProvider } from '@/lib/auth';
 // (Sprint 1) restores merchant auth on launch. The customer cart is now
 // shop-scoped, so its CartProvider lives in the per-shop layout
 // ((customer)/shop/[subdomain]/_layout) — not at the app root.
+//
+// Each tab is a self-contained stack; admin auth lives inside the (admin)
+// layout rather than here, so an admin session is only restored once that tab
+// is opened.
 export default function RootLayout() {
   return (
     <AuthProvider>
@@ -34,9 +38,10 @@ export default function RootLayout() {
           }}
         />
         <Tabs.Screen
-          name="admin"
+          name="(admin)"
           options={{
             title: 'Admin',
+            headerShown: false,
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="shield-outline" size={size} color={color} />
             ),

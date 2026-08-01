@@ -1,6 +1,11 @@
 import type { ApiResponse } from '@bazarhq/shared';
 
-import { getMerchantToken, clearMerchantToken } from './secure-store';
+import {
+  clearAdminToken,
+  clearMerchantToken,
+  getAdminToken,
+  getMerchantToken,
+} from './secure-store';
 
 // Ported from frontend/lib/api-client.ts with React Native differences:
 //
@@ -12,6 +17,12 @@ import { getMerchantToken, clearMerchantToken } from './secure-store';
 //    the web client's httpOnly-cookie auth does not apply here. Instead the JWT
 //    (obtained at login, persisted in expo-secure-store) is attached as an
 //    `Authorization: Bearer <jwt>` header by `authHeader()` below.
+//
+// Two independent auth realms share this module. Merchant and admin tokens are
+// separate credentials with separate lifetimes, so each realm gets its own
+// stored token and its own 401 handler — otherwise an expired admin session
+// would clear the merchant's token (and vice versa), signing the user out of a
+// tab they were not even using.
 
 const BASE = process.env.EXPO_PUBLIC_API_URL ?? 'https://bazarhq-api.onrender.com/v1';
 
@@ -21,22 +32,30 @@ const BASE = process.env.EXPO_PUBLIC_API_URL ?? 'https://bazarhq-api.onrender.co
 // cookie-based login is unaffected.
 export const MOBILE_CLIENT_HEADER = { 'X-Client': 'mobile' } as const;
 
-// Registered by the auth provider. Invoked when a request that DID carry a token
-// is rejected (401) — i.e. the token expired or its session was revoked — so the
-// app can drop back to the login screen.
-let onUnauthorized: (() => void) | null = null;
-export function setUnauthorizedHandler(fn: (() => void) | null): void {
-  onUnauthorized = fn;
+export type Realm = 'merchant' | 'admin';
+
+const TOKEN_STORE: Record<Realm, { get: () => Promise<string | null>; clear: () => Promise<void> }> = {
+  merchant: { get: getMerchantToken, clear: clearMerchantToken },
+  admin: { get: getAdminToken, clear: clearAdminToken },
+};
+
+// Registered by each realm's auth provider. Invoked when a request that DID
+// carry a token is rejected (401) — i.e. the token expired or its session was
+// revoked — so the app can drop back to that realm's login screen.
+const unauthorizedHandlers: Record<Realm, (() => void) | null> = {
+  merchant: null,
+  admin: null,
+};
+
+export function setUnauthorizedHandler(fn: (() => void) | null, realm: Realm = 'merchant'): void {
+  unauthorizedHandlers[realm] = fn;
 }
 
-async function authHeader(): Promise<Record<string, string>> {
-  const token = await getMerchantToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
-async function request<T>(path: string, init?: RequestInit): Promise<ApiResponse<T>> {
+async function request<T>(realm: Realm, path: string, init?: RequestInit): Promise<ApiResponse<T>> {
   const isFormData = init?.body instanceof FormData;
-  const auth = await authHeader();
+  const token = await TOKEN_STORE[realm].get();
+  const auth: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
   const res = await fetch(`${BASE}${path}`, {
     ...init,
     headers: {
@@ -50,32 +69,37 @@ async function request<T>(path: string, init?: RequestInit): Promise<ApiResponse
 
   // If a request we authenticated is rejected, the stored token is no longer
   // valid. Clear it and notify the app so it can return to the login screen.
-  // Guard on `auth.Authorization` so an anonymous 401 (e.g. bad login
-  // credentials) never trips the "session expired" path.
-  if (res.status === 401 && auth.Authorization) {
-    await clearMerchantToken();
-    onUnauthorized?.();
+  // Guard on `token` so an anonymous 401 (e.g. bad login credentials) never
+  // trips the "session expired" path.
+  if (res.status === 401 && token) {
+    await TOKEN_STORE[realm].clear();
+    unauthorizedHandlers[realm]?.();
   }
 
   return data;
 }
 
-export const api = {
-  get: <T>(path: string) => request<T>(path),
-  post: <T>(path: string, body?: unknown, headers?: Record<string, string>) =>
-    request<T>(path, {
-      method: 'POST',
-      body: body === undefined ? undefined : JSON.stringify(body),
-      headers,
-    }),
-  patch: <T>(path: string, body: unknown) =>
-    request<T>(path, { method: 'PATCH', body: JSON.stringify(body) }),
-  delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
-  // Multipart upload. Mirrors the web client's `postForm`: the body is passed
-  // through untouched and NO Content-Type is set, so React Native can generate
-  // the `multipart/form-data; boundary=…` header itself. Setting it by hand
-  // omits the boundary, and the API's busboy parser then sees zero files.
-  postForm: <T>(path: string, body: FormData) => request<T>(path, { method: 'POST', body }),
-};
+function createClient(realm: Realm) {
+  return {
+    get: <T>(path: string) => request<T>(realm, path),
+    post: <T>(path: string, body?: unknown, headers?: Record<string, string>) =>
+      request<T>(realm, path, {
+        method: 'POST',
+        body: body === undefined ? undefined : JSON.stringify(body),
+        headers,
+      }),
+    patch: <T>(path: string, body: unknown) =>
+      request<T>(realm, path, { method: 'PATCH', body: JSON.stringify(body) }),
+    delete: <T>(path: string) => request<T>(realm, path, { method: 'DELETE' }),
+    // Multipart upload. Mirrors the web client's `postForm`: the body is passed
+    // through untouched and NO Content-Type is set, so React Native can generate
+    // the `multipart/form-data; boundary=…` header itself. Setting it by hand
+    // omits the boundary, and the API's busboy parser then sees zero files.
+    postForm: <T>(path: string, body: FormData) => request<T>(realm, path, { method: 'POST', body }),
+  };
+}
+
+export const api = createClient('merchant');
+export const adminApi = createClient('admin');
 
 export const API_BASE_URL = BASE;
