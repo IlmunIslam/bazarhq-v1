@@ -1,8 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -14,20 +16,37 @@ import {
 } from 'react-native';
 
 import {
+  openAppSettings,
+  pickFromLibrary,
+  takePhoto,
+  type PickedAsset,
+  type PickOutcome,
+} from '@/lib/image-picker';
+import {
   createProduct,
+  deleteProductImage,
   fetchCategories,
   saveVariants,
   updateProduct,
+  uploadProductImage,
+  MAX_PRODUCT_IMAGES,
   type Category,
+  type ProductImage,
   type ProductPayload,
   type VariantInput,
 } from '@/lib/products-api';
 
-// Shared create/edit product form (Merchant tab, B1). Same data model as the
-// web ProductForm: product fields via POST/PATCH /products, then — only when
-// there's ≥1 variant — the whole variant set via POST /products/:id/variants
-// (which replaces all variants). Images are deliberately out of scope for B1
-// (a note stands in); B2 adds device upload via the separate images endpoint.
+// Shared create/edit product form (Merchant tab, B1 + B2). Same data model as
+// the web ProductForm: product fields via POST/PATCH /products, then — only
+// when there's ≥1 variant — the whole variant set via POST
+// /products/:id/variants (which replaces all variants).
+//
+// Images (B2) are a separate resource and can only be attached to a product
+// that already exists, since the endpoint is POST /products/:id/images. The web
+// dashboard resolves that by refusing to show the image picker until the
+// product is saved. On a phone that round trip is hostile, so instead images
+// picked before the first save are held locally as `pending` and uploaded right
+// after the product is created — see onSubmit.
 
 export interface VariantDraft {
   name: string;
@@ -45,6 +64,16 @@ export interface ProductFormDefaults {
   status: 'draft' | 'active';
   tags: string;
   variants: VariantDraft[];
+  images: ProductImage[];
+}
+
+// A device photo that is not on the server yet: either waiting for the product
+// to be created, currently uploading, or left over from a failed upload (which
+// the merchant can retry or discard). Keyed by `asset.uri` — the picker writes
+// each pick to its own cache path, so it is unique.
+interface PendingImage {
+  asset: PickedAsset;
+  uploading: boolean;
 }
 
 const EMPTY: ProductFormDefaults = {
@@ -56,6 +85,7 @@ const EMPTY: ProductFormDefaults = {
   status: 'draft',
   tags: '',
   variants: [],
+  images: [],
 };
 
 export default function ProductForm({
@@ -66,8 +96,14 @@ export default function ProductForm({
   defaultValues?: ProductFormDefaults;
 }) {
   const router = useRouter();
-  const isEdit = !!productId;
   const initial = defaultValues ?? EMPTY;
+
+  // Tracks the product's server id. Starts as `productId` when editing, and is
+  // filled in once a new product is created — so if a later step (variants or
+  // an image upload) fails, tapping save again PATCHes the product that now
+  // exists instead of creating a duplicate.
+  const [savedId, setSavedId] = useState<string | undefined>(productId);
+  const isEdit = !!savedId;
 
   const [categories, setCategories] = useState<Category[]>([]);
 
@@ -80,8 +116,17 @@ export default function ProductForm({
   const [tags, setTags] = useState(initial.tags);
   const [variants, setVariants] = useState<VariantDraft[]>(initial.variants);
 
+  const [images, setImages] = useState<ProductImage[]>(initial.images);
+  const [pending, setPending] = useState<PendingImage[]>([]);
+  const [imageError, setImageError] = useState('');
+  const [permissionBlocked, setPermissionBlocked] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  const totalImages = images.length + pending.length;
+  const imagesBusy = pending.some(p => p.uploading) || deletingId !== null;
 
   useEffect(() => {
     fetchCategories().then(res => {
@@ -95,6 +140,70 @@ export default function ProductForm({
     setVariants(prev => [...prev, { name: '', price: '', stock: '', sku: '' }]);
   const removeVariant = (i: number) =>
     setVariants(prev => prev.filter((_, idx) => idx !== i));
+
+  // ── Images ──────────────────────────────────────────────────────────────────
+
+  const setPendingUploading = (uri: string, uploading: boolean) =>
+    setPending(prev => prev.map(p => (p.asset.uri === uri ? { ...p, uploading } : p)));
+
+  /** Uploads one already-picked asset against a known product id. */
+  const uploadPending = async (id: string, asset: PickedAsset) => {
+    setPendingUploading(asset.uri, true);
+    const res = await uploadProductImage(id, asset);
+    if (res.success) {
+      setImages(prev => [...prev, res.data.image]);
+      setPending(prev => prev.filter(p => p.asset.uri !== asset.uri));
+      return true;
+    }
+    // Leave the tile in place, no longer spinning, so it can be retried or removed.
+    setPendingUploading(asset.uri, false);
+    setImageError(res.error.message);
+    return false;
+  };
+
+  const handlePicked = async (outcome: PickOutcome) => {
+    if (outcome.status === 'cancelled') return;
+    if (outcome.status === 'denied') {
+      setPermissionBlocked(outcome.blocked);
+      setImageError(outcome.message);
+      return;
+    }
+
+    setImageError('');
+    setPermissionBlocked(false);
+    setPending(prev => [...prev, { asset: outcome.asset, uploading: false }]);
+
+    // Editing an existing product: upload straight away. Creating a new one:
+    // hold it until the product exists (onSubmit picks it up).
+    if (savedId) await uploadPending(savedId, outcome.asset);
+  };
+
+  const addImage = () => {
+    if (totalImages >= MAX_PRODUCT_IMAGES) {
+      setImageError(`Maximum ${MAX_PRODUCT_IMAGES} images per product.`);
+      return;
+    }
+    Alert.alert('Add photo', 'Where should the photo come from?', [
+      { text: 'Take photo', onPress: () => void takePhoto().then(handlePicked) },
+      { text: 'Choose from library', onPress: () => void pickFromLibrary().then(handlePicked) },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const removeImage = async (image: ProductImage) => {
+    if (!savedId) return;
+    setImageError('');
+    setDeletingId(image.id);
+    const res = await deleteProductImage(savedId, image.id);
+    setDeletingId(null);
+    if (res.success) setImages(prev => prev.filter(i => i.id !== image.id));
+    else setImageError(res.error.message);
+  };
+
+  const removePending = (uri: string) => {
+    setImageError('');
+    setPending(prev => prev.filter(p => p.asset.uri !== uri));
+  };
 
   const onSubmit = async () => {
     setError('');
@@ -133,20 +242,34 @@ export default function ProductForm({
     setSubmitting(true);
 
     // ── Save product ──
-    let savedId = productId;
-    if (isEdit && productId) {
-      const res = await updateProduct(productId, payload);
+    let id = savedId;
+    if (id) {
+      const res = await updateProduct(id, payload);
       if (!res.success) { setError(res.error.message); setSubmitting(false); return; }
     } else {
       const res = await createProduct(payload);
       if (!res.success) { setError(res.error.message); setSubmitting(false); return; }
-      savedId = res.data.product.id;
+      id = res.data.product.id;
+      setSavedId(id);
     }
 
     // ── Save variants (only when present; replaces the whole set) ──
-    if (savedId && variantInputs.length > 0) {
-      const vRes = await saveVariants(savedId, variantInputs);
+    if (variantInputs.length > 0) {
+      const vRes = await saveVariants(id, variantInputs);
       if (!vRes.success) { setError(vRes.error.message); setSubmitting(false); return; }
+    }
+
+    // ── Upload images picked before the product existed ──
+    // Sequential, mirroring the web form's upload loop. On failure we stop and
+    // stay on the form: the product itself is already saved, and `savedId` is
+    // now set, so the merchant can retry the image without duplicating it.
+    for (const p of pending) {
+      const uploaded = await uploadPending(id, p.asset);
+      if (!uploaded) {
+        setError('Product saved, but an image failed to upload. Retry it below, or leave and add it later.');
+        setSubmitting(false);
+        return;
+      }
     }
 
     setSubmitting(false);
@@ -322,14 +445,108 @@ export default function ProductForm({
           ))
         )}
 
-        {/* Images — deferred to B2 */}
+        {/* Images */}
         <Text style={styles.sectionTitle}>Images</Text>
-        <View style={styles.imageNote}>
-          <Ionicons name="image-outline" size={18} color="#6b7280" />
-          <Text style={styles.imageNoteText}>
-            Photo upload from your device is coming next. For now, add images from the web dashboard.
-          </Text>
+        <View style={styles.imageGrid}>
+          {images.map((img, i) => {
+            const deleting = deletingId === img.id;
+            return (
+              <View key={img.id} style={styles.imageTile}>
+                <Image source={img.url} style={styles.imageThumb} contentFit="cover" transition={120} />
+                {i === 0 && (
+                  <View style={styles.primaryBadge}>
+                    <Text style={styles.primaryBadgeText}>Primary</Text>
+                  </View>
+                )}
+                {deleting ? (
+                  <View style={styles.tileOverlay}>
+                    <ActivityIndicator color="#ffffff" />
+                  </View>
+                ) : (
+                  <Pressable
+                    style={styles.tileRemove}
+                    onPress={() => removeImage(img)}
+                    disabled={imagesBusy || submitting}
+                    hitSlop={6}
+                  >
+                    <Ionicons name="close" size={14} color="#ffffff" />
+                  </Pressable>
+                )}
+              </View>
+            );
+          })}
+
+          {pending.map(p => {
+            // Not on the server yet. While `uploading`, it shows progress; when
+            // it has stopped and the product already exists, the upload failed
+            // and tapping the tile retries it.
+            const canRetry = !p.uploading && !!savedId;
+            return (
+              <Pressable
+                key={p.asset.uri}
+                style={styles.imageTile}
+                onPress={() => canRetry && savedId && uploadPending(savedId, p.asset)}
+                disabled={!canRetry || submitting}
+              >
+                <Image source={p.asset.uri} style={styles.imageThumb} contentFit="cover" transition={120} />
+                {p.uploading ? (
+                  <View style={styles.tileOverlay}>
+                    <ActivityIndicator color="#ffffff" />
+                    <Text style={styles.tileOverlayText}>Uploading…</Text>
+                  </View>
+                ) : (
+                  <>
+                    {canRetry ? (
+                      <View style={[styles.tileOverlay, styles.tileOverlayFailed]}>
+                        <Ionicons name="refresh" size={18} color="#ffffff" />
+                        <Text style={styles.tileOverlayText}>Retry</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.pendingBadge}>
+                        <Text style={styles.pendingBadgeText}>Pending</Text>
+                      </View>
+                    )}
+                    <Pressable
+                      style={styles.tileRemove}
+                      onPress={() => removePending(p.asset.uri)}
+                      disabled={submitting}
+                      hitSlop={6}
+                    >
+                      <Ionicons name="close" size={14} color="#ffffff" />
+                    </Pressable>
+                  </>
+                )}
+              </Pressable>
+            );
+          })}
+
+          {totalImages < MAX_PRODUCT_IMAGES && (
+            <Pressable
+              style={[styles.imageTile, styles.addTile, (imagesBusy || submitting) && styles.disabled]}
+              onPress={addImage}
+              disabled={imagesBusy || submitting}
+            >
+              <Ionicons name="camera-outline" size={22} color="#6b7280" />
+              <Text style={styles.addTileText}>Add photo</Text>
+            </Pressable>
+          )}
         </View>
+
+        <Text style={styles.hint}>
+          {totalImages}/{MAX_PRODUCT_IMAGES} images. The first photo is the primary one shoppers see.
+          {!savedId && totalImages > 0 ? ' Photos upload when you create the product.' : ''}
+        </Text>
+
+        {imageError !== '' && (
+          <View style={styles.imageErrorRow}>
+            <Text style={styles.error}>{imageError}</Text>
+            {permissionBlocked && (
+              <Pressable onPress={openAppSettings} hitSlop={8}>
+                <Text style={styles.settingsLink}>Open Settings</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
 
         {error !== '' && <Text style={styles.error}>{error}</Text>}
 
@@ -407,17 +624,70 @@ const styles = StyleSheet.create({
   variantHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   variantIndex: { fontSize: 13, fontWeight: '700', color: '#374151' },
 
-  imageNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+  imageGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  imageTile: {
+    width: '31%',
+    aspectRatio: 1,
     borderRadius: 12,
-    padding: 14,
+    overflow: 'hidden',
+    backgroundColor: '#f3f4f6',
+  },
+  imageThumb: { width: '100%', height: '100%' },
+  addTile: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#d1d5db',
     backgroundColor: '#fafafa',
   },
-  imageNoteText: { flexShrink: 1, fontSize: 13, color: '#6b7280', lineHeight: 18 },
+  addTileText: { fontSize: 12, fontWeight: '600', color: '#6b7280' },
+
+  tileOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(15,23,42,0.55)',
+  },
+  tileOverlayFailed: { backgroundColor: 'rgba(185,28,28,0.65)' },
+  tileOverlayText: { fontSize: 11, fontWeight: '700', color: '#ffffff' },
+
+  tileRemove: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(15,23,42,0.7)',
+  },
+  primaryBadge: {
+    position: 'absolute',
+    left: 4,
+    bottom: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: 'rgba(15,23,42,0.75)',
+  },
+  primaryBadgeText: { fontSize: 10, fontWeight: '700', color: '#ffffff' },
+  pendingBadge: {
+    position: 'absolute',
+    left: 4,
+    bottom: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: 'rgba(217,119,6,0.9)',
+  },
+  pendingBadgeText: { fontSize: 10, fontWeight: '700', color: '#ffffff' },
+
+  imageErrorRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10 },
+  settingsLink: { fontSize: 14, fontWeight: '700', color: '#0f172a', marginTop: 16, textDecorationLine: 'underline' },
 
   error: { fontSize: 14, fontWeight: '600', color: '#b91c1c', marginTop: 16 },
 

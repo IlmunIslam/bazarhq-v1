@@ -33,6 +33,8 @@ export default function EditProductScreen() {
             stock: String(v.stock),
             sku: v.sku ?? '',
           })),
+          // Already ordered by sortOrder server-side, so images[0] is the primary.
+          images: p.images,
         });
       } else {
         setNotFound(true);

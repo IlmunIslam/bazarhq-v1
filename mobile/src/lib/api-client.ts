@@ -71,6 +71,11 @@ export const api = {
   patch: <T>(path: string, body: unknown) =>
     request<T>(path, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+  // Multipart upload. Mirrors the web client's `postForm`: the body is passed
+  // through untouched and NO Content-Type is set, so React Native can generate
+  // the `multipart/form-data; boundary=…` header itself. Setting it by hand
+  // omits the boundary, and the API's busboy parser then sees zero files.
+  postForm: <T>(path: string, body: FormData) => request<T>(path, { method: 'POST', body }),
 };
 
 export const API_BASE_URL = BASE;

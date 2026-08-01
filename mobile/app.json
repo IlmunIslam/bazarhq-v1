@@ -35,7 +35,15 @@
           }
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow BazarHQ to use your photos so you can add product images to your store.",
+          "cameraPermission": "Allow BazarHQ to use your camera so you can photograph products for your store.",
+          "microphonePermission": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
