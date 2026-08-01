@@ -83,9 +83,16 @@ export default function CartScreen() {
             >
               <Text style={styles.remove}>×</Text>
             </Pressable>
-            <Text style={styles.itemSubtotal}>
-              ৳{(item.price * item.quantity).toLocaleString()}
-            </Text>
+            {/* Both derived from the same item state the summary reduces over,
+                so the line and the order total can't disagree. */}
+            <View style={styles.itemTotals}>
+              <Text style={styles.itemCalc}>
+                ৳{item.price.toLocaleString()} × {item.quantity}
+              </Text>
+              <Text style={styles.itemSubtotal}>
+                ৳{(item.price * item.quantity).toLocaleString()}
+              </Text>
+            </View>
           </View>
         </View>
       ))}
@@ -168,6 +175,8 @@ const styles = StyleSheet.create({
 
   itemRight: { alignItems: 'flex-end', justifyContent: 'space-between' },
   remove: { fontSize: 24, color: '#9ca3af', lineHeight: 24 },
+  itemTotals: { alignItems: 'flex-end', gap: 2 },
+  itemCalc: { fontSize: 12, color: '#9ca3af' },
   itemSubtotal: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
 
   clearBtn: { alignSelf: 'flex-start', paddingVertical: 14 },

@@ -62,6 +62,11 @@ export default function CartPage() {
                     onClick={() => update(item.productId, item.variantId, item.quantity + 1)}
                   >+</button>
                 </div>
+                {/* Both derived from the same item state the summary reduces
+                    over, so the line and the order total can't disagree. */}
+                <p className="sf-cart-item-calc">
+                  ৳{item.price.toLocaleString()} × {item.quantity}
+                </p>
                 <p className="sf-cart-item-subtotal">৳{(item.price * item.quantity).toLocaleString()}</p>
                 <button
                   className="sf-cart-remove"

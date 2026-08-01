@@ -76,13 +76,15 @@ export function CartProvider({ subdomain, children }: { subdomain: string; child
     setItems([]);
   }, [subdomain]);
 
-  const count = items.reduce((s, i) => s + i.quantity, 0);
-  const total = items.reduce((s, i) => s + i.price * i.quantity, 0);
-
-  const value = useMemo(
-    () => ({ items, count, total, ready, add, update, remove, clear }),
-    [items, count, total, ready, add, update, remove, clear],
-  );
+  // Derived inside the memo: computing them outside meant new values on every
+  // render, which defeated the memo they were then fed into. `items` is the only
+  // real input, and it is the single source both the cart lines and this total
+  // read from, so a line subtotal can never disagree with the order total.
+  const value = useMemo(() => {
+    const count = items.reduce((s, i) => s + i.quantity, 0);
+    const total = items.reduce((s, i) => s + i.price * i.quantity, 0);
+    return { items, count, total, ready, add, update, remove, clear };
+  }, [items, ready, add, update, remove, clear]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

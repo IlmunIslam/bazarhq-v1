@@ -1592,6 +1592,47 @@ a { color: inherit; }
 .sf-add-to-cart-btn--added { background: #16a34a; }
 .sf-add-to-cart-btn--added:hover { box-shadow: 0 10px 22px -10px rgba(22,163,74,.5); }
 
+/* Live line total under the quantity stepper — updates as quantity changes. */
+.sf-pd-subtotal {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0.875rem;
+  margin-bottom: 0.875rem;
+  background: #fafafa;
+  border: 1px solid #ececed;
+  border-radius: 10px;
+}
+.sf-pd-subtotal-calc { font-size: 0.875rem; color: #6b7280; font-variant-numeric: tabular-nums; }
+.sf-pd-subtotal-value {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #111827;
+  letter-spacing: -.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Secondary CTA revealed once something has been added to the cart. */
+.sf-pd-cart-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  height: 48px;
+  margin-bottom: 0.875rem;
+  background: #fff;
+  color: #111827;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background .15s ease, border-color .15s ease;
+}
+.sf-pd-cart-cta:hover { background: #f4f4f5; border-color: #9ca3af; }
+
 .sf-pd-low-stock { font-size: 0.8125rem; font-weight: 500; color: #b45309; margin-bottom: 1rem; }
 
 .sf-pd-description { margin-top: 2rem; border-top: 1px solid #ececed; padding-top: 1.5rem; }
@@ -1665,7 +1706,8 @@ a { color: inherit; }
   gap: 0.625rem;
   flex-shrink: 0;
 }
-.sf-cart-item-subtotal { font-size: 1rem; font-weight: 700; color: #111827; letter-spacing: -.01em; }
+.sf-cart-item-calc { font-size: 0.8125rem; color: #9ca3af; font-variant-numeric: tabular-nums; }
+.sf-cart-item-subtotal { font-size: 1rem; font-weight: 700; color: #111827; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
 
 .sf-cart-remove {
   background: none;

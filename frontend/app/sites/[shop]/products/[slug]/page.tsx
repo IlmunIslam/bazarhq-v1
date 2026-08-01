@@ -41,7 +41,11 @@ export default function ProductDetailPage() {
   const [activeImage, setActiveImage] = useState(0);
   const [selectedVariant, setSelectedVariant] = useState<Variant | null>(null);
   const [qty, setQty] = useState(1);
+  // `added` is the transient 2s success flash on the button itself. `hasAdded`
+  // is sticky for the life of the page: the "Go to cart" shortcut must not
+  // disappear from under someone who is still reading when the flash times out.
   const [added, setAdded] = useState(false);
+  const [hasAdded, setHasAdded] = useState(false);
 
   useEffect(() => {
     fetch(`${API}/storefront/${subdomain}/products/${slug}`)
@@ -91,6 +95,11 @@ export default function ProductDetailPage() {
   const showCompare = !selectedVariant && compareAt !== null && compareAt > Number(displayPrice);
   const discount = showCompare ? Math.round((1 - Number(displayPrice) / compareAt!) * 100) : null;
 
+  // Derived on every render rather than held in state, so it can never drift out
+  // of sync with the quantity stepper or the selected variant's price.
+  const unitPrice = Number(displayPrice);
+  const lineTotal = unitPrice * qty;
+
   const handleAddToCart = () => {
     add({
       productId: product.id,
@@ -103,6 +112,7 @@ export default function ProductDetailPage() {
       slug: product.slug,
     });
     setAdded(true);
+    setHasAdded(true);
     setTimeout(() => setAdded(false), 2000);
   };
 
@@ -218,6 +228,26 @@ export default function ProductDetailPage() {
               ) : inStock ? 'Add to Cart' : 'Out of Stock'}
             </button>
           </div>
+
+          {/* Live line total — recomputed on every quantity/variant change.
+              aria-live so screen readers hear the new total as it changes. */}
+          {inStock && (
+            <div className="sf-pd-subtotal" aria-live="polite">
+              <span className="sf-pd-subtotal-calc">
+                ৳{unitPrice.toLocaleString()} × {qty}
+              </span>
+              <span className="sf-pd-subtotal-value">৳{lineTotal.toLocaleString()}</span>
+            </div>
+          )}
+
+          {hasAdded && (
+            <Link href={shopHref('/cart', subdomain)} className="sf-pd-cart-cta">
+              Go to cart
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+            </Link>
+          )}
 
           {inStock && displayStock <= 5 && (
             <p className="sf-pd-low-stock">Only {displayStock} left in stock</p>

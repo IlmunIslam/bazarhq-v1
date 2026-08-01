@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -44,6 +44,7 @@ interface ProductDetail {
 export default function ProductDetailScreen() {
   const { subdomain, slug } = useLocalSearchParams<{ subdomain: string; slug: string }>();
   const { add } = useCart();
+  const router = useRouter();
 
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,7 +53,11 @@ export default function ProductDetailScreen() {
   const [activeImage, setActiveImage] = useState(0);
   const [selectedVariant, setSelectedVariant] = useState<Variant | null>(null);
   const [qty, setQty] = useState(1);
+  // `added` is the transient 2s success flash on the button itself. `hasAdded`
+  // is sticky for the life of the screen: the "Go to cart" shortcut must not
+  // disappear from under someone who is still reading when the flash times out.
   const [added, setAdded] = useState(false);
+  const [hasAdded, setHasAdded] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -102,6 +107,11 @@ export default function ProductDetailScreen() {
   const showCompare = !selectedVariant && compareAt !== null && compareAt > Number(displayPrice);
   const discount = showCompare ? Math.round((1 - Number(displayPrice) / compareAt!) * 100) : null;
 
+  // Derived on every render rather than held in state, so it can never drift out
+  // of sync with the quantity stepper or the selected variant's price.
+  const unitPrice = Number(displayPrice);
+  const lineTotal = unitPrice * qty;
+
   const handleAddToCart = async () => {
     await add({
       productId: product.id,
@@ -114,8 +124,13 @@ export default function ProductDetailScreen() {
       slug: product.slug,
     });
     setAdded(true);
+    setHasAdded(true);
     setTimeout(() => setAdded(false), 2000);
   };
+
+  // Stays inside this shop's stack — the cart is a sibling route of this screen.
+  const goToCart = () =>
+    router.push({ pathname: '/shop/[subdomain]/cart', params: { subdomain } });
 
   return (
     <>
@@ -240,6 +255,27 @@ export default function ProductDetailScreen() {
             </Pressable>
           </View>
 
+          {/* Live line total — recomputed on every quantity/variant change. */}
+          {inStock && (
+            <View
+              style={styles.subtotal}
+              accessibilityLiveRegion="polite"
+              accessibilityLabel={`Total for ${qty} ${qty === 1 ? 'item' : 'items'}: ${lineTotal} taka`}
+            >
+              <Text style={styles.subtotalCalc}>
+                ৳{unitPrice.toLocaleString()} × {qty}
+              </Text>
+              <Text style={styles.subtotalValue}>৳{lineTotal.toLocaleString()}</Text>
+            </View>
+          )}
+
+          {hasAdded && (
+            <Pressable style={styles.cartCta} onPress={goToCart}>
+              <Text style={styles.cartCtaText}>Go to cart</Text>
+              <Text style={styles.cartCtaArrow}>→</Text>
+            </Pressable>
+          )}
+
           {inStock && displayStock <= 5 && (
             <Text style={styles.lowStock}>Only {displayStock} left in stock</Text>
           )}
@@ -340,6 +376,37 @@ const styles = StyleSheet.create({
   addBtnAdded: { backgroundColor: '#047857' },
   addBtnDisabled: { opacity: 0.5 },
   addBtnText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
+
+  subtotal: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderWidth: 1,
+    borderColor: '#ececed',
+    borderRadius: 10,
+    backgroundColor: '#fafafa',
+  },
+  subtotalCalc: { fontSize: 14, color: '#6b7280' },
+  subtotalValue: { fontSize: 18, fontWeight: '800', color: '#0f172a' },
+
+  cartCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 10,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 10,
+    backgroundColor: '#ffffff',
+  },
+  cartCtaText: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
+  cartCtaArrow: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
 
   lowStock: { fontSize: 13, color: '#b45309', marginTop: 10, fontWeight: '600' },
   descText: { fontSize: 15, color: '#374151', lineHeight: 22 },
