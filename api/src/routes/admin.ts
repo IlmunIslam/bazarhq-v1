@@ -51,7 +51,24 @@ const AnnouncementSchema = z.object({
 
 // ─── Helper: Issue admin JWT ─────────────────────────────────────────────────
 
-async function issueAdminJwt(adminId: string, req: import('express').Request, res: import('express').Response) {
+/**
+ * Creates the admin session and hands the JWT to the client.
+ *
+ * Web clients keep httpOnly-cookie auth exactly as before. Native clients
+ * (React Native) can't read httpOnly cookies, so they opt in with the
+ * `X-Client: mobile` header and receive the JWT in the return value to persist
+ * in expo-secure-store — the same handshake merchant login uses (routes/auth.ts).
+ * Either way the same Session row + jti back the token, so it stays fully
+ * revocable, keeps its 8h expiry, and is still governed by the 30-minute
+ * inactivity clock started below.
+ *
+ * @returns the raw JWT for native clients, or null when it went out as a cookie.
+ */
+async function issueAdminJwt(
+  adminId: string,
+  req: import('express').Request,
+  res: import('express').Response
+): Promise<string | null> {
   const redis = getRedis();
   const { token, jti } = signToken({ sub: adminId, role: 'admin' });
 
@@ -70,7 +87,11 @@ async function issueAdminJwt(adminId: string, req: import('express').Request, re
     await redis.set(`admin:activity:${jti}`, '1', { ex: 30 * 60 });
   }
 
-  res.cookie('adminToken', token, authCookieOptions(8 * 60 * 60 * 1000));
+  const isMobile = req.get('x-client') === 'mobile';
+  if (!isMobile) {
+    res.cookie('adminToken', token, authCookieOptions(8 * 60 * 60 * 1000));
+  }
+  return isMobile ? token : null;
 }
 
 // ─── POST /v1/admin/auth/login ───────────────────────────────────────────────
@@ -138,9 +159,10 @@ router.post('/auth/login', publicRateLimit, validate(LoginSchema), async (req, r
     }
   }
 
-  await issueAdminJwt(admin.id, req, res);
+  const token = await issueAdminJwt(admin.id, req, res);
   return ok(res, {
     admin: { id: admin.id, email: admin.email, fullName: admin.fullName, role: admin.role },
+    ...(token ? { token } : {}),
   });
 });
 
@@ -165,10 +187,11 @@ router.post('/auth/verify-totp', publicRateLimit, validate(TotpVerifySchema), as
   }
 
   await redis.del(`admin:pending:${tempToken}`);
-  await issueAdminJwt(admin.id, req, res);
+  const token = await issueAdminJwt(admin.id, req, res);
 
   return ok(res, {
     admin: { id: admin.id, email: admin.email, fullName: admin.fullName, role: admin.role },
+    ...(token ? { token } : {}),
   });
 });
 
