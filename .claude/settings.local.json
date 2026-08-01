@@ -67,7 +67,8 @@
       "Bash(rm -f \"src/app/\\(customer\\)/product/[slug].tsx\" \"src/app/\\(customer\\)/cart.tsx\" \"src/lib/shop.ts\")",
       "Bash(rmdir \"src/app/\\(customer\\)/product\")",
       "Bash(grep -oE \"\\\\`/[^\\\\`]*\\\\`\" .expo/types/router.d.ts)",
-      "Bash(grep -oE \"\\\\`/products[^\\\\`]*\\\\`\" .expo/types/router.d.ts)"
+      "Bash(grep -oE \"\\\\`/products[^\\\\`]*\\\\`\" .expo/types/router.d.ts)",
+      "WebFetch(domain:docs.expo.dev)"
     ]
   }
 }
