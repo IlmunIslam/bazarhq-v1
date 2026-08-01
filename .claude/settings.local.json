@@ -68,7 +68,9 @@
       "Bash(rmdir \"src/app/\\(customer\\)/product\")",
       "Bash(grep -oE \"\\\\`/[^\\\\`]*\\\\`\" .expo/types/router.d.ts)",
       "Bash(grep -oE \"\\\\`/products[^\\\\`]*\\\\`\" .expo/types/router.d.ts)",
-      "WebFetch(domain:docs.expo.dev)"
+      "WebFetch(domain:docs.expo.dev)",
+      "Bash(grep -oE '`/[^`]*`' .expo/types/router.d.ts)",
+      "Bash(grep -oE '`/[^`$]*`' .expo/types/router.d.ts)"
     ]
   }
 }
