@@ -7,11 +7,17 @@ import { validate } from '../middleware/validate';
 import { ok, created, fail } from '../utils/response';
 import { prisma } from '../lib/prisma';
 import { uploadStream, deleteImage } from '../services/cloudinary';
+import specRoutes from './product-specs';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 router.use(requireMerchant);
+
+// Sprint C2 — marketplace spec values (/:id/specs, /:id/global-category). Kept
+// in its own file for size; mounted here so it inherits the requireMerchant
+// above rather than re-running it. Adds new paths only; no route below changes.
+router.use(specRoutes);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
