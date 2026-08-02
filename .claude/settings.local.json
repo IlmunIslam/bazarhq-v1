@@ -70,7 +70,9 @@
       "Bash(grep -oE \"\\\\`/products[^\\\\`]*\\\\`\" .expo/types/router.d.ts)",
       "WebFetch(domain:docs.expo.dev)",
       "Bash(grep -oE '`/[^`]*`' .expo/types/router.d.ts)",
-      "Bash(grep -oE '`/[^`$]*`' .expo/types/router.d.ts)"
+      "Bash(grep -oE '`/[^`$]*`' .expo/types/router.d.ts)",
+      "Bash(mkdir -p /tmp/c0)",
+      "Bash(git show *)"
     ]
   }
 }
