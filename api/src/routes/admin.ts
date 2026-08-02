@@ -14,6 +14,7 @@ import { encrypt, decrypt } from '../utils/encryption';
 import { getRedis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { writeAuditLog } from '../services/audit';
+import taxonomyRoutes from './admin-taxonomy';
 
 const router = Router();
 
@@ -198,6 +199,11 @@ router.post('/auth/verify-totp', publicRateLimit, validate(TotpVerifySchema), as
 // ─── All routes below require admin auth ────────────────────────────────────
 
 router.use(requireAdmin);
+
+// Sprint C1 — taxonomy authoring (/categories, /spec-fields). Kept in its own
+// file for size; mounted here so it inherits the requireAdmin above rather than
+// re-running it. Adds new paths only; no route below changes.
+router.use(taxonomyRoutes);
 
 // ─── GET /v1/admin/auth/me ───────────────────────────────────────────────────
 

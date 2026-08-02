@@ -9,6 +9,7 @@ const NAV = [
   { href: '/superadmin', label: 'Overview', exact: true },
   { href: '/superadmin/merchants', label: 'Merchants' },
   { href: '/superadmin/analytics', label: 'Analytics' },
+  { href: '/superadmin/taxonomy', label: 'Taxonomy' },
   { href: '/superadmin/content', label: 'Announcements' },
   { href: '/superadmin/audit-logs', label: 'Audit Logs' },
 ];
