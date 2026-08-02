@@ -76,7 +76,13 @@
       "Bash(grep -nE '^#{1,4} |^\\\\*\\\\*C[0-9]' docs/comparison-feature-plan.md)",
       "Bash(echo \"--- exit: $? ---\")",
       "Bash(npx tsx *)",
-      "PowerShell($p = Get-NetTCPConnection -LocalPort 3001 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if \\($p\\) { $p | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }; \"stopped PID\\(s\\): $p\" } else { \"nothing listening on 3001\" })"
+      "PowerShell($p = Get-NetTCPConnection -LocalPort 3001 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if \\($p\\) { $p | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }; \"stopped PID\\(s\\): $p\" } else { \"nothing listening on 3001\" })",
+      "Bash(echo \"--- tsc exit: $? ---\")",
+      "mcp__playwright__browser_select_option",
+      "mcp__playwright__browser_close",
+      "Bash(npx eslint *)",
+      "Bash(echo \"--- lint exit: $? ---\")",
+      "Bash(echo \"--- export exit: $? ---\")"
     ]
   }
 }
