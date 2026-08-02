@@ -21,11 +21,37 @@ bazarhq-v1/
 ```bash
 cd api
 npm install
-npx prisma migrate dev --name <description>   # create + apply migration
-npx prisma db push                             # sync schema without migration file (dev only)
+npx prisma db push                             # sync schema to the DB in the connection string
 npx prisma generate                            # regenerate Prisma client after schema changes
 npm run dev                                    # start Express dev server
+npm run seed:admin                             # one-off: create the superadmin account
+npm run seed:taxonomy                          # idempotent: starter marketplace taxonomy (C0)
 ```
+
+### ⚠️ How schema changes actually reach production
+
+**Migrations do NOT run automatically on deploy.** There is no `prisma/migrations/`
+history in this repo and `render.yaml` has **no `preDeployCommand`** — the Render
+build runs `prisma generate && tsc` only. Anything that assumes `migrate deploy`
+happens on push is wrong.
+
+The established process is:
+
+1. Edit `prisma/schema.prisma`.
+2. Generate the exact delta **without touching any database**:
+   ```bash
+   git show HEAD:api/prisma/schema.prisma > /tmp/old.prisma
+   npx prisma migrate diff --from-schema-datamodel /tmp/old.prisma \
+     --to-schema-datamodel prisma/schema.prisma --script
+   ```
+3. Save it as a reviewed file in `api/prisma/sql/<sprint>_<name>.sql`
+   (see `m1_marketplace_indexes.sql`, `c0_taxonomy.sql`).
+4. **A human applies it to production** (Supabase SQL editor), then the API is deployed.
+   Apply-then-deploy: new tables are invisible to running code, so there is no window
+   where the app expects something the database lacks.
+
+Keep schema changes additive — new tables, new nullable columns, new indexes.
+A nullable column with no default is metadata-only in Postgres (no table rewrite).
 
 ### Frontend (`frontend/`)
 ```bash
@@ -49,7 +75,7 @@ npm run lint     # ESLint
 | SMS | SSL Wireless (Bangladesh) |
 | Cache / Rate limit | Upstash Redis |
 | Frontend hosting | Vercel (auto-deploy on push to main, root: `/frontend`) |
-| API hosting | Render (auto-deploy on push, root: `/api`) — Prisma migrations run as pre-deploy hook |
+| API hosting | Render (auto-deploy on push, root: `/api`) — **schema changes do NOT auto-apply**, see below |
 
 ## Live Deployment URLs
 

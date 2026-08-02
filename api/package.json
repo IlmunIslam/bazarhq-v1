@@ -10,7 +10,8 @@
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
-    "seed:admin": "tsx src/scripts/seed-admin.ts"
+    "seed:admin": "tsx src/scripts/seed-admin.ts",
+    "seed:taxonomy": "tsx src/scripts/seed-taxonomy.ts"
   },
   "dependencies": {
     "@bazarhq/shared": "*",

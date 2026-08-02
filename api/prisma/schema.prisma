@@ -183,15 +183,25 @@ model Product {
   createdAt   DateTime      @default(now()) @map("created_at")
   updatedAt   DateTime      @updatedAt @map("updated_at")
 
+  // Marketplace taxonomy (Sprint C0). Independent of `categoryId` above, which
+  // remains the merchant's own per-shop category for storefront navigation.
+  // This one points at the shared, superadmin-curated taxonomy and is what
+  // drives spec templates and cross-shop comparison. Nullable: every existing
+  // product has none, and merchants opt in per product.
+  globalCategoryId String?  @map("global_category_id")
+
   shop      Shop          @relation(fields: [shopId], references: [id])
   category  ShopCategory? @relation(fields: [categoryId], references: [id])
+  globalCategory Category? @relation(fields: [globalCategoryId], references: [id])
   images    ProductImage[]
   variants  ProductVariant[]
+  specs     ProductSpec[]
   orderItems OrderItem[]
 
   @@unique([shopId, slug])
   @@index([shopId, status])
   @@index([status, createdAt])   // marketplace: browse/sort active products across shops
+  @@index([globalCategoryId, status])  // marketplace: browse/compare within a taxonomy node
   @@map("products")
 }
 
@@ -230,6 +240,94 @@ model ProductVariant {
 
   @@index([productId])
   @@map("product_variants")
+}
+
+// ─── Marketplace taxonomy & specs (Sprint C0) ────────────────────────────────
+//
+// A shared, superadmin-curated category tree, the per-category spec templates
+// hung off it, and the per-product values for those templates. This is what
+// makes specs line up into comparison rows across different shops.
+//
+// Deliberately SEPARATE from ShopCategory, which stays exactly as it is: that
+// table is per-shop, free-form and merchant-owned (Shop A's "Electronics" and
+// Shop B's "electronics" are unrelated rows), so it cannot carry a shared
+// vocabulary. Products may reference both — see Product.globalCategoryId.
+
+model Category {
+  id        String   @id @default(uuid())
+  slug      String   @unique                    // globally unique, unlike ShopCategory.slug
+  name      String
+  parentId  String?  @map("parent_id")
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Self-relation. The column allows any depth, but the API enforces two levels
+  // (parent → leaf) and only leaves carry spec templates: deeper trees raise
+  // spec-inheritance questions for no near-term gain.
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+
+  specFields SpecField[]
+  products   Product[]
+
+  @@index([parentId, sortOrder])
+  @@map("categories")
+}
+
+enum SpecDataType {
+  text
+  number
+  boolean
+  enum
+}
+
+model SpecField {
+  id           String       @id @default(uuid())
+  categoryId   String       @map("category_id")
+  key          String                                   // stable machine key, e.g. "ram_gb"
+  label        String                                   // display label, e.g. "RAM"
+  unit         String?                                  // "GB", "inch", "mAh"
+  dataType     SpecDataType @default(text) @map("data_type")
+  options      String[]     @default([])                // permitted values when dataType = enum
+  sortOrder    Int          @default(0) @map("sort_order")
+  isComparable Boolean      @default(true) @map("is_comparable")   // render as a comparison row
+  isRequired   Boolean      @default(false) @map("is_required")
+  isActive     Boolean      @default(true) @map("is_active")       // soft delete — keeps values
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  category Category      @relation(fields: [categoryId], references: [id])
+  values   ProductSpec[]
+
+  @@unique([categoryId, key])
+  @@index([categoryId, sortOrder])
+  @@map("spec_fields")
+}
+
+model ProductSpec {
+  id          String   @id @default(uuid())
+  productId   String   @map("product_id")
+  specFieldId String   @map("spec_field_id")
+
+  // One typed column per data type rather than a single stringly-typed value:
+  // `valueNumber` stays a real Decimal so numeric specs can be compared and
+  // filtered ("RAM ≥ 8GB") without casting on every read.
+  valueText   String?  @map("value_text")
+  valueNumber Decimal? @map("value_number") @db.Decimal(14, 4)
+  valueBool   Boolean? @map("value_bool")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  specField SpecField @relation(fields: [specFieldId], references: [id])
+
+  // Makes the bulk spec save (C2) an idempotent upsert.
+  @@unique([productId, specFieldId])
+  @@index([specFieldId])
+  @@map("product_specs")
 }
 
 // ─── Commerce ─────────────────────────────────────────────────────────────────
