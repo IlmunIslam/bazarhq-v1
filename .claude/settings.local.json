@@ -72,7 +72,11 @@
       "Bash(grep -oE '`/[^`]*`' .expo/types/router.d.ts)",
       "Bash(grep -oE '`/[^`$]*`' .expo/types/router.d.ts)",
       "Bash(mkdir -p /tmp/c0)",
-      "Bash(git show *)"
+      "Bash(git show *)",
+      "Bash(grep -nE '^#{1,4} |^\\\\*\\\\*C[0-9]' docs/comparison-feature-plan.md)",
+      "Bash(echo \"--- exit: $? ---\")",
+      "Bash(npx tsx *)",
+      "PowerShell($p = Get-NetTCPConnection -LocalPort 3001 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if \\($p\\) { $p | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }; \"stopped PID\\(s\\): $p\" } else { \"nothing listening on 3001\" })"
     ]
   }
 }
