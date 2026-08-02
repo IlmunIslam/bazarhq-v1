@@ -14,6 +14,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
+import { useCompare } from '@/lib/compare-context';
 import {
   fetchMarketplaceProducts,
   fetchMarketplaceShops,
@@ -206,6 +207,26 @@ function ProductCard({ product }: { product: MarketplaceProduct }) {
   const compare = product.compareAtPrice ? Number(product.compareAtPrice) : null;
   const discount = compare && compare > price ? Math.round((1 - price / compare) * 100) : null;
 
+  const { isSelected, isFull, toggle } = useCompare();
+  const selected = isSelected(product.id);
+  const blocked = !selected && isFull;
+
+  // The card is wrapped in a Link, but React Native's responder system gives the
+  // innermost pressable the touch, so this never triggers the navigation — no
+  // preventDefault equivalent is needed the way it is on web.
+  const onToggle = () => {
+    if (blocked) return;
+    void toggle({
+      id: product.id,
+      name: product.name,
+      slug: product.slug,
+      basePrice: product.basePrice,
+      compareAtPrice: product.compareAtPrice,
+      image: product.image,
+      shop: { name: product.shop.name, subdomain: product.shop.subdomain },
+    });
+  };
+
   return (
     <Link
       href={{
@@ -230,6 +251,23 @@ function ProductCard({ product }: { product: MarketplaceProduct }) {
               </View>
             </View>
           )}
+          {/* Opposite corner from the sale badge, so the two never collide */}
+          <Pressable
+            onPress={onToggle}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityState={{ selected, disabled: blocked }}
+            accessibilityLabel={
+              selected
+                ? `Remove ${product.name} from comparison`
+                : `Add ${product.name} to comparison`
+            }
+            style={[styles.cmpBtn, selected && styles.cmpBtnOn, blocked && styles.cmpBtnBlocked]}
+          >
+            <Text style={[styles.cmpText, selected && styles.cmpTextOn]}>
+              {selected ? '✓ Compare' : '+ Compare'}
+            </Text>
+          </Pressable>
         </View>
         <Text style={styles.cardName} numberOfLines={2}>
           {product.name}
@@ -377,6 +415,23 @@ const styles = StyleSheet.create({
   badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   badgeSale: { backgroundColor: '#dc2626' },
   badgeText: { color: '#ffffff', fontSize: 11, fontWeight: '700' },
+
+  cmpBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  cmpBtnOn: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
+  // At the cap: still visible, clearly not actionable. The tray explains why.
+  cmpBtnBlocked: { opacity: 0.45 },
+  cmpText: { fontSize: 11, fontWeight: '700', color: '#0f172a' },
+  cmpTextOn: { color: '#ffffff' },
 
   cardName: { fontSize: 14, fontWeight: '600', color: '#0f172a', marginTop: 8 },
   priceRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },

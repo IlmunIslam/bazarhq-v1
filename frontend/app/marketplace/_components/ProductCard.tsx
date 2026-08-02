@@ -1,4 +1,5 @@
 import { storefrontProductUrl } from '@/lib/storefront-url';
+import CompareToggle from './CompareToggle';
 import { formatTk, type MarketplaceProduct } from './api';
 
 // A single cross-shop product card. Reuses the storefront's `sf-product-card`
@@ -27,6 +28,8 @@ export default function ProductCard({ product, index = 0 }: { product: Marketpla
             <span className="sf-badge sf-badge--sale">−{discount}%</span>
           </div>
         )}
+        {/* Opposite corner from the sale badge, so the two never collide */}
+        <CompareToggle product={product} />
       </div>
       <div className="sf-product-info">
         <p className="sf-product-name">{product.name}</p>
