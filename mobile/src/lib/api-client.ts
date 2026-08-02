@@ -90,6 +90,8 @@ function createClient(realm: Realm) {
       }),
     patch: <T>(path: string, body: unknown) =>
       request<T>(realm, path, { method: 'PATCH', body: JSON.stringify(body) }),
+    put: <T>(path: string, body: unknown) =>
+      request<T>(realm, path, { method: 'PUT', body: JSON.stringify(body) }),
     delete: <T>(path: string) => request<T>(realm, path, { method: 'DELETE' }),
     // Multipart upload. Mirrors the web client's `postForm`: the body is passed
     // through untouched and NO Content-Type is set, so React Native can generate

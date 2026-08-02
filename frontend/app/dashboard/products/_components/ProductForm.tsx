@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -41,6 +41,76 @@ export interface ProductFormProps {
 
 interface Category { id: string; name: string; }
 
+// ─── Marketplace taxonomy (Sprint C3) ─────────────────────────────────────────
+//
+// The global marketplace category is entirely separate from `categoryId` above,
+// which stays the merchant's own per-shop category for their storefront. This
+// one is the shared vocabulary that makes products comparable across shops.
+
+type SpecDataType = 'text' | 'number' | 'boolean' | 'enum';
+
+interface GlobalCategoryNode {
+  id: string;
+  slug: string;
+  name: string;
+  specFieldCount: number;
+  children: GlobalCategoryNode[];
+}
+
+interface SpecField {
+  id: string;
+  key: string;
+  label: string;
+  unit: string | null;
+  dataType: SpecDataType;
+  options: string[];
+  isRequired: boolean;
+}
+
+interface SpecState {
+  globalCategory: { id: string; name: string } | null;
+  specFields: SpecField[];
+  values: Record<string, string | boolean>;
+}
+
+// Form values are held as strings so every input is controlled the same way.
+// Booleans are TRI-STATE — '' | 'yes' | 'no' — because "not set" and "false" are
+// genuinely different: the API stores null vs false, and a plain checkbox would
+// silently write `false` onto every product the moment a category is picked.
+type SpecFormValues = Record<string, string>;
+
+function toFormValues(fields: SpecField[], values: Record<string, string | boolean>): SpecFormValues {
+  const out: SpecFormValues = {};
+  for (const f of fields) {
+    const v = values[f.id];
+    if (v === undefined) out[f.id] = '';
+    else if (f.dataType === 'boolean') out[f.id] = v === true ? 'yes' : 'no';
+    else out[f.id] = String(v);
+  }
+  return out;
+}
+
+// Every field is sent, including the empty ones: PUT /specs is a bulk replace,
+// and an explicit null is what clears a value the merchant emptied.
+function toSpecPayload(fields: SpecField[], values: SpecFormValues) {
+  return fields.map(f => {
+    const raw = values[f.id] ?? '';
+    if (raw === '') return { specFieldId: f.id, value: null };
+    if (f.dataType === 'boolean') return { specFieldId: f.id, value: raw === 'yes' };
+    return { specFieldId: f.id, value: raw };
+  });
+}
+
+/**
+ * The API reports the affected spec count inside the 409 message rather than as
+ * a field, so read it back out — falling back to what the form itself knows if
+ * the wording ever changes.
+ */
+function specCountFromMessage(message: string, fallback: number): number {
+  const match = message.match(/\b(\d+)\b/);
+  return match ? Number(match[1]) : fallback;
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ProductForm({ productId, defaultValues }: ProductFormProps) {
@@ -49,8 +119,34 @@ export default function ProductForm({ productId, defaultValues }: ProductFormPro
   const [images, setImages] = useState<ProductImage[]>(defaultValues?.images ?? []);
   const [uploading, setUploading] = useState(false);
   const [serverError, setServerError] = useState('');
+  const [notice, setNotice] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
-  const isEdit = !!productId;
+
+  // Tracks the product's server id. Starts as `productId` when editing and is
+  // filled in once a new product is created — so if a later step (variants,
+  // marketplace category, specs) fails, submitting again UPDATES the product
+  // that now exists instead of creating a duplicate. Same approach the mobile
+  // form already uses; C3 adds two more post-create steps, which is what makes
+  // holding this in state rather than a local matter.
+  const [savedId, setSavedId] = useState<string | undefined>(productId);
+  const isEdit = !!savedId;
+
+  // ── Marketplace taxonomy state ──
+  const [globalTree, setGlobalTree] = useState<GlobalCategoryNode[]>([]);
+  const [globalCategoryId, setGlobalCategoryId] = useState<string | null>(null);
+  // What the server currently holds, so the save can tell whether the selection
+  // actually changed and the cancel path knows what to revert to.
+  const [serverCategoryId, setServerCategoryId] = useState<string | null>(null);
+  const [specFields, setSpecFields] = useState<SpecField[]>([]);
+  const [specValues, setSpecValues] = useState<SpecFormValues>({});
+  const [specsLoading, setSpecsLoading] = useState(false);
+  const [finishing, setFinishing] = useState(false);
+  const [pendingConfirm, setPendingConfirm] = useState<{ id: string; count: number } | null>(null);
+
+  // The template + values as last loaded from the server, so switching category
+  // away and back before saving restores the merchant's entries instead of
+  // silently dropping them.
+  const loadedSpecs = useRef<{ categoryId: string | null; fields: SpecField[]; values: SpecFormValues } | null>(null);
 
   const {
     register,
@@ -80,7 +176,62 @@ export default function ProductForm({ productId, defaultValues }: ProductFormPro
     api.get<{ categories: Category[] }>('/products/categories').then(res => {
       if (res.success) setCategories(res.data.categories);
     });
+    api.get<{ categories: GlobalCategoryNode[] }>('/categories').then(res => {
+      if (res.success) setGlobalTree(res.data.categories);
+    });
   }, []);
+
+  // On edit, the marketplace category and its values come from C2's endpoint —
+  // GET /products/:id returns neither, and this one call carries the category,
+  // the template and the saved values together.
+  const loadSpecState = useCallback(async (id: string) => {
+    const res = await api.get<SpecState>(`/products/${id}/specs`);
+    if (!res.success) return;
+    const { globalCategory, specFields: fields, values } = res.data;
+    const catId = globalCategory?.id ?? null;
+    const formValues = toFormValues(fields, values);
+    setServerCategoryId(catId);
+    setGlobalCategoryId(catId);
+    setSpecFields(fields);
+    setSpecValues(formValues);
+    loadedSpecs.current = { categoryId: catId, fields, values: formValues };
+  }, []);
+
+  useEffect(() => {
+    if (productId) loadSpecState(productId);
+  }, [productId, loadSpecState]);
+
+  const handleGlobalCategoryChange = async (nextValue: string) => {
+    const nextId = nextValue || null;
+    setGlobalCategoryId(nextId);
+    setNotice('');
+
+    if (!nextId) {
+      setSpecFields([]);
+      setSpecValues({});
+      return;
+    }
+
+    // Returning to the category this product was loaded with restores what the
+    // merchant had, rather than making them retype it.
+    const loaded = loadedSpecs.current;
+    if (loaded && loaded.categoryId === nextId) {
+      setSpecFields(loaded.fields);
+      setSpecValues(loaded.values);
+      return;
+    }
+
+    setSpecsLoading(true);
+    const res = await api.get<{ specFields: SpecField[] }>(`/categories/${nextId}/spec-fields`);
+    setSpecsLoading(false);
+    if (res.success) {
+      setSpecFields(res.data.specFields);
+      setSpecValues({});
+    } else {
+      setSpecFields([]);
+      setServerError(res.error.message);
+    }
+  };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -105,8 +256,73 @@ export default function ProductForm({ productId, defaultValues }: ProductFormPro
     if (res.success) setImages(prev => prev.filter(img => img.id !== imageId));
   };
 
+  /**
+   * Steps 3 and 4 of the save, plus the exit — factored out so the confirmation
+   * dialog can resume the sequence after the merchant approves clearing specs.
+   *
+   * Both steps are skipped when nothing about the marketplace category changed,
+   * so an ordinary edit costs no extra requests.
+   */
+  const finishSave = async (id: string, clearSpecs: boolean): Promise<void> => {
+    if (globalCategoryId !== serverCategoryId) {
+      const res = await api.put<unknown>(`/products/${id}/global-category`, {
+        globalCategoryId,
+        ...(clearSpecs ? { clearSpecs: true } : {}),
+      });
+      if (!res.success) {
+        // The API refuses to discard specs without explicit confirmation. This
+        // is where that gate becomes visible to the merchant.
+        if (res.error.code === 'SPECS_EXIST') {
+          const known = Object.values(loadedSpecs.current?.values ?? {}).filter(Boolean).length;
+          setPendingConfirm({ id, count: specCountFromMessage(res.error.message, known) });
+          return;
+        }
+        setServerError(res.error.message);
+        return;
+      }
+      setServerCategoryId(globalCategoryId);
+    }
+
+    if (globalCategoryId && specFields.length > 0) {
+      const res = await api.put<unknown>(`/products/${id}/specs`, {
+        specs: toSpecPayload(specFields, specValues),
+      });
+      if (!res.success) {
+        setServerError(res.error.message);
+        return;
+      }
+    }
+
+    router.push('/dashboard/products');
+  };
+
+  const confirmCategoryChange = async () => {
+    const pending = pendingConfirm;
+    if (!pending) return;
+    setPendingConfirm(null);
+    setFinishing(true);
+    await finishSave(pending.id, true);
+    setFinishing(false);
+  };
+
+  /**
+   * Declining leaves the product and variants saved — those already committed —
+   * and puts the category picker back to what the server still holds, so the
+   * form can never sit in a state the server does not agree with.
+   */
+  const cancelCategoryChange = async () => {
+    const pending = pendingConfirm;
+    if (!pending) return;
+    setPendingConfirm(null);
+    setFinishing(true);
+    await loadSpecState(pending.id);
+    setFinishing(false);
+    setNotice('Product saved. Marketplace category left unchanged.');
+  };
+
   const onSubmit = async (data: FormData) => {
     setServerError('');
+    setNotice('');
     const tagsArray = data.tags
       ? data.tags.split(',').map(t => t.trim()).filter(Boolean)
       : [];
@@ -120,27 +336,44 @@ export default function ProductForm({ productId, defaultValues }: ProductFormPro
       tags: tagsArray,
     };
 
-    let savedId = productId;
+    let id = savedId;
 
-    if (isEdit) {
-      const res = await api.patch<{ product: { id: string } }>(`/products/${productId}`, payload);
+    if (id) {
+      const res = await api.patch<{ product: { id: string } }>(`/products/${id}`, payload);
       if (!res.success) { setServerError(res.error.message); return; }
     } else {
       const res = await api.post<{ product: { id: string } }>('/products', payload);
       if (!res.success) { setServerError(res.error.message); return; }
-      savedId = res.data.product.id;
+      id = res.data.product.id;
+      // Recorded before the later steps run: if one of them fails, submitting
+      // again must update this product rather than create a second one.
+      setSavedId(id);
     }
 
     // Save variants if any
     if (data.variants && data.variants.length > 0) {
-      const vRes = await api.post(`/products/${savedId}/variants`, { variants: data.variants });
+      const vRes = await api.post(`/products/${id}/variants`, { variants: data.variants });
       if (!vRes.success) { setServerError((vRes as { error: { message: string } }).error.message); return; }
     }
 
-    router.push('/dashboard/products');
+    await finishSave(id, false);
   };
 
   const hasVariants = watch('variants')?.length ? watch('variants')!.length > 0 : false;
+
+  // Required specs are advisory: they are surfaced live as the merchant types,
+  // but never block a save — blocking would strand products that predate the
+  // template they are now measured against.
+  const missingRequired = specFields.filter(f => f.isRequired && !(specValues[f.id] ?? '').trim());
+
+  const selectedCategoryName = globalCategoryId
+    ? globalTree.flatMap(p => [p, ...p.children]).find(c => c.id === globalCategoryId)?.name ?? null
+    : null;
+
+  const setSpecValue = (fieldId: string, value: string) =>
+    setSpecValues(prev => ({ ...prev, [fieldId]: value }));
+
+  const busy = isSubmitting || finishing;
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="product-form">
@@ -286,6 +519,108 @@ export default function ProductForm({ productId, defaultValues }: ProductFormPro
               </div>
             ))}
           </div>
+
+          {/* Specifications — driven by the marketplace category's template */}
+          {globalCategoryId && (
+            <div className="card form-section">
+              <div className="section-header">
+                <h2 className="section-title">Specifications</h2>
+                {selectedCategoryName && (
+                  <span className="text-muted text-sm">{selectedCategoryName}</span>
+                )}
+              </div>
+
+              {specsLoading ? (
+                <p className="text-muted text-sm">Loading specifications…</p>
+              ) : specFields.length === 0 ? (
+                <p className="text-muted text-sm">
+                  No specification fields defined for this category yet. You can still save the
+                  product — specifications can be filled in once they are added.
+                </p>
+              ) : (
+                <>
+                  <p className="text-muted text-sm" style={{ marginBottom: '0.875rem' }}>
+                    These appear when shoppers compare products in this category. Leave any blank.
+                  </p>
+
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                      gap: '0 1rem',
+                    }}
+                  >
+                    {specFields.map(f => {
+                      const value = specValues[f.id] ?? '';
+                      const label = (
+                        <label>
+                          {f.label}
+                          {f.unit && <span className="optional"> ({f.unit})</span>}
+                          {f.isRequired && <span className="text-error"> *</span>}
+                        </label>
+                      );
+
+                      if (f.dataType === 'boolean') {
+                        return (
+                          <div className="field" key={f.id}>
+                            {label}
+                            <select
+                              className="select"
+                              value={value}
+                              onChange={e => setSpecValue(f.id, e.target.value)}
+                            >
+                              {/* "Not set" is a real state, distinct from "No" */}
+                              <option value="">—</option>
+                              <option value="yes">Yes</option>
+                              <option value="no">No</option>
+                            </select>
+                          </div>
+                        );
+                      }
+
+                      if (f.dataType === 'enum') {
+                        return (
+                          <div className="field" key={f.id}>
+                            {label}
+                            <select
+                              className="select"
+                              value={value}
+                              onChange={e => setSpecValue(f.id, e.target.value)}
+                            >
+                              <option value="">—</option>
+                              {f.options.map(o => (
+                                <option key={o} value={o}>{o}</option>
+                              ))}
+                            </select>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="field" key={f.id}>
+                          {label}
+                          <input
+                            type={f.dataType === 'number' ? 'number' : 'text'}
+                            step={f.dataType === 'number' ? 'any' : undefined}
+                            value={value}
+                            onChange={e => setSpecValue(f.id, e.target.value)}
+                            placeholder={f.dataType === 'number' ? '0' : ''}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {missingRequired.length > 0 && (
+                    <p className="text-sm" style={{ color: 'var(--color-warning, #b45309)' }}>
+                      Recommended but empty: {missingRequired.map(f => f.label).join(', ')}. You can
+                      still save.
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Right column — meta */}
@@ -346,10 +681,43 @@ export default function ProductForm({ productId, defaultValues }: ProductFormPro
               <input {...register('tags')} placeholder="e.g. summer, cotton, sale" />
             </div>
           </div>
+
+          {/* Marketplace — the shared, cross-shop taxonomy. Separate from the
+              merchant's own category above, which is unchanged. */}
+          <div className="card form-section">
+            <h2 className="section-title">Marketplace</h2>
+            <div className="field">
+              <label>Category <span className="optional">(optional)</span></label>
+              <select
+                className="select"
+                value={globalCategoryId ?? ''}
+                onChange={e => handleGlobalCategoryChange(e.target.value)}
+              >
+                <option value="">— None —</option>
+                {globalTree.map(parent =>
+                  // A top-level category with no children is itself a leaf and
+                  // can be picked directly; otherwise only its leaves can.
+                  parent.children.length > 0 ? (
+                    <optgroup key={parent.id} label={parent.name}>
+                      {parent.children.map(leaf => (
+                        <option key={leaf.id} value={leaf.id}>{leaf.name}</option>
+                      ))}
+                    </optgroup>
+                  ) : (
+                    <option key={parent.id} value={parent.id}>{parent.name}</option>
+                  )
+                )}
+              </select>
+              <span className="field-hint">
+                Lets shoppers compare this product against similar ones from other shops.
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
       {serverError && <div className="alert alert-error">{serverError}</div>}
+      {notice && <div className="alert alert-success">{notice}</div>}
 
       <div className="form-actions">
         <button
@@ -359,10 +727,36 @@ export default function ProductForm({ productId, defaultValues }: ProductFormPro
         >
           Cancel
         </button>
-        <button type="submit" className="btn btn-primary btn-sm" disabled={isSubmitting}>
-          {isSubmitting ? 'Saving…' : isEdit ? 'Save changes' : 'Create product'}
+        <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>
+          {busy ? 'Saving…' : isEdit ? 'Save changes' : 'Create product'}
         </button>
       </div>
+
+      {/* Category-change confirmation. The API refuses to discard spec values
+          without an explicit acknowledgement (409 SPECS_EXIST); this is that
+          refusal surfaced to the merchant. */}
+      {pendingConfirm && (
+        <div className="modal-overlay" onClick={cancelCategoryChange}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <h2 className="modal-title">Change marketplace category?</h2>
+            <p className="text-sm">
+              {pendingConfirm.count} specification{pendingConfirm.count === 1 ? '' : 's'} entered for
+              this product&apos;s previous category will be cleared. This can&apos;t be undone.
+            </p>
+            <p className="text-muted text-sm" style={{ marginTop: '0.5rem' }}>
+              The rest of your changes have already been saved.
+            </p>
+            <div className="modal-actions">
+              <button type="button" className="btn btn-secondary" onClick={cancelCategoryChange}>
+                Keep current category
+              </button>
+              <button type="button" className="btn btn-danger" onClick={confirmCategoryChange}>
+                Change and clear
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }

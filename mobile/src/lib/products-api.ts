@@ -105,6 +105,84 @@ export function fetchCategories() {
   return api.get<{ categories: Category[] }>('/products/categories');
 }
 
+// ─── Marketplace taxonomy + specs (C3) ────────────────────────────────────────
+//
+// The global marketplace category is entirely separate from `categoryId` above,
+// which stays the merchant's own per-shop category. This one is the shared
+// vocabulary that makes products comparable across shops.
+//
+// The two GETs are public (no auth needed); they go through the merchant client
+// anyway so every call in this file behaves the same way.
+
+export type SpecDataType = 'text' | 'number' | 'boolean' | 'enum';
+
+export interface GlobalCategoryNode {
+  id: string;
+  slug: string;
+  name: string;
+  specFieldCount: number;
+  children: GlobalCategoryNode[];
+}
+
+export interface SpecField {
+  id: string;
+  key: string;
+  label: string;
+  unit: string | null;
+  dataType: SpecDataType;
+  options: string[];
+  isRequired: boolean;
+}
+
+export interface SpecState {
+  globalCategory: { id: string; name: string } | null;
+  specFields: SpecField[];
+  values: Record<string, string | boolean>;
+}
+
+/** One entry of the bulk replace. `null` clears the value. */
+export interface SpecInput {
+  specFieldId: string;
+  value: string | boolean | null;
+}
+
+/** The active two-level taxonomy, for the picker. */
+export function fetchGlobalCategories() {
+  return api.get<{ categories: GlobalCategoryNode[] }>('/categories');
+}
+
+/** A category's active spec template — used when the merchant picks a new one. */
+export function fetchSpecTemplate(categoryId: string) {
+  return api.get<{ specFields: SpecField[] }>(`/categories/${categoryId}/spec-fields`);
+}
+
+/**
+ * The product's marketplace category, its template and its saved values in one
+ * call. GET /products/:id returns none of this, so the edit screen reads it here.
+ */
+export function fetchProductSpecs(productId: string) {
+  return api.get<SpecState>(`/products/${productId}/specs`);
+}
+
+/**
+ * Assign, change or clear (null) the marketplace category.
+ *
+ * Fails with 409 SPECS_EXIST when the product already holds spec values, unless
+ * `clearSpecs` is true — the API refuses to discard a merchant's work without an
+ * explicit acknowledgement. Pass true only after they confirm.
+ */
+export function setGlobalCategory(productId: string, globalCategoryId: string | null, clearSpecs = false) {
+  return api.put<SpecState & { changed: boolean; clearedSpecs: number }>(
+    `/products/${productId}/global-category`,
+    { globalCategoryId, ...(clearSpecs ? { clearSpecs: true } : {}) }
+  );
+}
+
+/** Bulk replace of the product's spec values. Idempotent. */
+export function saveProductSpecs(productId: string, specs: SpecInput[]) {
+  return api.put<SpecState>(`/products/${productId}/specs`, { specs });
+}
+
 // ─── Images (B2) ──────────────────────────────────────────────────────────────
 //
 // Identical server contract to the web dashboard: multipart POST with the file

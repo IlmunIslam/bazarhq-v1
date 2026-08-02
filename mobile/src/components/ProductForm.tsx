@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -26,13 +26,21 @@ import {
   createProduct,
   deleteProductImage,
   fetchCategories,
+  fetchGlobalCategories,
+  fetchProductSpecs,
+  fetchSpecTemplate,
+  saveProductSpecs,
   saveVariants,
+  setGlobalCategory,
   updateProduct,
   uploadProductImage,
   MAX_PRODUCT_IMAGES,
   type Category,
+  type GlobalCategoryNode,
   type ProductImage,
   type ProductPayload,
+  type SpecField,
+  type SpecInput,
   type VariantInput,
 } from '@/lib/products-api';
 
@@ -71,6 +79,45 @@ export interface ProductFormDefaults {
 // to be created, currently uploading, or left over from a failed upload (which
 // the merchant can retry or discard). Keyed by `asset.uri` — the picker writes
 // each pick to its own cache path, so it is unique.
+// Spec values are held as strings so every control is driven the same way.
+// Booleans are TRI-STATE — '' | 'yes' | 'no' — because "not set" and "false" are
+// genuinely different: the API stores null vs false, and a plain on/off switch
+// would silently write `false` onto every product the moment a category is
+// picked.
+type SpecFormValues = Record<string, string>;
+
+function toFormValues(fields: SpecField[], values: Record<string, string | boolean>): SpecFormValues {
+  const out: SpecFormValues = {};
+  for (const f of fields) {
+    const v = values[f.id];
+    if (v === undefined) out[f.id] = '';
+    else if (f.dataType === 'boolean') out[f.id] = v === true ? 'yes' : 'no';
+    else out[f.id] = String(v);
+  }
+  return out;
+}
+
+// Every field is sent, including empty ones: PUT /specs is a bulk replace, and
+// an explicit null is what clears a value the merchant emptied.
+function toSpecPayload(fields: SpecField[], values: SpecFormValues): SpecInput[] {
+  return fields.map(f => {
+    const raw = values[f.id] ?? '';
+    if (raw === '') return { specFieldId: f.id, value: null };
+    if (f.dataType === 'boolean') return { specFieldId: f.id, value: raw === 'yes' };
+    return { specFieldId: f.id, value: raw };
+  });
+}
+
+/**
+ * The API reports the affected spec count inside the 409 message rather than as
+ * a field, so read it back out — falling back to what the form already knows if
+ * the wording ever changes.
+ */
+function specCountFromMessage(message: string, fallback: number): number {
+  const match = message.match(/\b(\d+)\b/);
+  return match ? Number(match[1]) : fallback;
+}
+
 interface PendingImage {
   asset: PickedAsset;
   uploading: boolean;
@@ -124,15 +171,102 @@ export default function ProductForm({
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+
+  // ── Marketplace taxonomy ──
+  const [globalTree, setGlobalTree] = useState<GlobalCategoryNode[]>([]);
+  const [globalCategoryId, setGlobalCategoryId] = useState<string | null>(null);
+  // What the server currently holds, so the save can tell whether the selection
+  // actually changed and the decline path knows what to revert to.
+  const [serverCategoryId, setServerCategoryId] = useState<string | null>(null);
+  const [openParentId, setOpenParentId] = useState<string | null>(null);
+  const [specFields, setSpecFields] = useState<SpecField[]>([]);
+  const [specValues, setSpecValues] = useState<SpecFormValues>({});
+  const [specsLoading, setSpecsLoading] = useState(false);
+
+  // The template + values as last loaded from the server, so switching category
+  // away and back before saving restores the merchant's entries instead of
+  // silently dropping them.
+  const loadedSpecs = useRef<{ categoryId: string | null; fields: SpecField[]; values: SpecFormValues } | null>(null);
 
   const totalImages = images.length + pending.length;
   const imagesBusy = pending.some(p => p.uploading) || deletingId !== null;
+
+  // Required specs are advisory: surfaced live as the merchant types, but never
+  // blocking a save — blocking would strand products that predate the template
+  // they are now measured against.
+  const missingRequired = specFields.filter(f => f.isRequired && !(specValues[f.id] ?? '').trim());
+  const openParent = globalTree.find(p => p.id === openParentId) ?? null;
 
   useEffect(() => {
     fetchCategories().then(res => {
       if (res.success) setCategories(res.data.categories);
     });
+    fetchGlobalCategories().then(res => {
+      if (res.success) setGlobalTree(res.data.categories);
+    });
   }, []);
+
+  // On edit, the marketplace category and its values come from the specs
+  // endpoint — GET /products/:id returns neither, and this one call carries the
+  // category, the template and the saved values together.
+  const loadSpecState = useCallback(async (id: string) => {
+    const res = await fetchProductSpecs(id);
+    if (!res.success) return;
+    const { globalCategory, specFields: fields, values } = res.data;
+    const catId = globalCategory?.id ?? null;
+    const formValues = toFormValues(fields, values);
+    setServerCategoryId(catId);
+    setGlobalCategoryId(catId);
+    setSpecFields(fields);
+    setSpecValues(formValues);
+    loadedSpecs.current = { categoryId: catId, fields, values: formValues };
+  }, []);
+
+  useEffect(() => {
+    if (productId) loadSpecState(productId);
+  }, [productId, loadSpecState]);
+
+  // Keeps the leaf row showing the branch the current selection lives in.
+  useEffect(() => {
+    if (!globalCategoryId || openParentId) return;
+    const parent = globalTree.find(p => p.children.some(c => c.id === globalCategoryId));
+    if (parent) setOpenParentId(parent.id);
+  }, [globalCategoryId, globalTree, openParentId]);
+
+  const chooseGlobalCategory = async (nextId: string | null) => {
+    setGlobalCategoryId(nextId);
+    setNotice('');
+
+    if (!nextId) {
+      setSpecFields([]);
+      setSpecValues({});
+      return;
+    }
+
+    // Returning to the category this product was loaded with restores what the
+    // merchant had, rather than making them retype it.
+    const loaded = loadedSpecs.current;
+    if (loaded && loaded.categoryId === nextId) {
+      setSpecFields(loaded.fields);
+      setSpecValues(loaded.values);
+      return;
+    }
+
+    setSpecsLoading(true);
+    const res = await fetchSpecTemplate(nextId);
+    setSpecsLoading(false);
+    if (res.success) {
+      setSpecFields(res.data.specFields);
+      setSpecValues({});
+    } else {
+      setSpecFields([]);
+      setError(res.error.message);
+    }
+  };
+
+  const setSpecValue = (fieldId: string, value: string) =>
+    setSpecValues(prev => ({ ...prev, [fieldId]: value }));
 
   const setVariant = (i: number, patch: Partial<VariantDraft>) =>
     setVariants(prev => prev.map((v, idx) => (idx === i ? { ...v, ...patch } : v)));
@@ -205,8 +339,73 @@ export default function ProductForm({
     setPending(prev => prev.filter(p => p.asset.uri !== uri));
   };
 
+  /**
+   * The category-change gate, surfaced. The API refuses to discard spec values
+   * without an explicit acknowledgement (409 SPECS_EXIST); this is that refusal
+   * put in front of the merchant. Wrapped in a promise so the save sequence can
+   * simply await the answer.
+   */
+  const confirmClear = (count: number) =>
+    new Promise<boolean>(resolve => {
+      Alert.alert(
+        'Change marketplace category?',
+        `${count} specification${count === 1 ? '' : 's'} entered for this product's previous ` +
+          `category will be cleared. This can't be undone.\n\n` +
+          `The rest of your changes have already been saved.`,
+        [
+          { text: 'Keep current category', style: 'cancel', onPress: () => resolve(false) },
+          { text: 'Change and clear', style: 'destructive', onPress: () => resolve(true) },
+        ],
+        { cancelable: true, onDismiss: () => resolve(false) }
+      );
+    });
+
+  /**
+   * Steps 4 and 5 of the save. Both are skipped when nothing about the
+   * marketplace category changed, so an ordinary edit costs no extra requests.
+   * Returns false when the sequence should stop without leaving the form.
+   */
+  const finishSave = async (id: string): Promise<boolean> => {
+    if (globalCategoryId !== serverCategoryId) {
+      let res = await setGlobalCategory(id, globalCategoryId);
+
+      if (!res.success && res.error.code === 'SPECS_EXIST') {
+        const known = Object.values(loadedSpecs.current?.values ?? {}).filter(Boolean).length;
+        const approved = await confirmClear(specCountFromMessage(res.error.message, known));
+
+        if (!approved) {
+          // Declining leaves the product, variants and images saved — those
+          // already committed — and puts the picker back to what the server
+          // still holds, so the form can never sit in a state the server does
+          // not agree with.
+          await loadSpecState(id);
+          setNotice('Product saved. Marketplace category left unchanged.');
+          return false;
+        }
+        res = await setGlobalCategory(id, globalCategoryId, true);
+      }
+
+      if (!res.success) {
+        setError(res.error.message);
+        return false;
+      }
+      setServerCategoryId(globalCategoryId);
+    }
+
+    if (globalCategoryId && specFields.length > 0) {
+      const res = await saveProductSpecs(id, toSpecPayload(specFields, specValues));
+      if (!res.success) {
+        setError(res.error.message);
+        return false;
+      }
+    }
+
+    return true;
+  };
+
   const onSubmit = async () => {
     setError('');
+    setNotice('');
 
     // ── Validate ──
     if (!name.trim()) return setError('Product name is required.');
@@ -272,7 +471,11 @@ export default function ProductForm({
       }
     }
 
+    // ── Marketplace category, then specs (C3) ──
+    const finished = await finishSave(id);
     setSubmitting(false);
+    if (!finished) return;
+
     router.back();
   };
 
@@ -375,6 +578,160 @@ export default function ProductForm({
             );
           })}
         </ScrollView>
+
+        {/* Marketplace category — the shared, cross-shop taxonomy. Separate from
+            the merchant's own category above, which is unchanged. Two chip rows
+            rather than one: the taxonomy is two levels, and tapping a top-level
+            chip opens its leaves. */}
+        <Text style={styles.sectionTitle}>Marketplace category</Text>
+        <Text style={styles.hint}>
+          Lets shoppers compare this product against similar ones from other shops. Optional.
+        </Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+          <Pressable
+            style={[styles.chip, globalCategoryId === null && styles.chipActive]}
+            onPress={() => {
+              setOpenParentId(null);
+              chooseGlobalCategory(null);
+            }}
+          >
+            <Text style={[styles.chipText, globalCategoryId === null && styles.chipTextActive]}>
+              None
+            </Text>
+          </Pressable>
+          {globalTree.map(parent => {
+            // A top-level category with no children is itself a leaf and is
+            // picked directly; otherwise the chip just opens its branch.
+            const isLeaf = parent.children.length === 0;
+            const active = isLeaf ? globalCategoryId === parent.id : openParentId === parent.id;
+            return (
+              <Pressable
+                key={parent.id}
+                style={[styles.chip, active && styles.chipActive]}
+                onPress={() => {
+                  if (isLeaf) {
+                    setOpenParentId(null);
+                    chooseGlobalCategory(parent.id);
+                  } else {
+                    setOpenParentId(openParentId === parent.id ? null : parent.id);
+                  }
+                }}
+              >
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>{parent.name}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
+        {openParent && openParent.children.length > 0 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+            {openParent.children.map(leaf => {
+              const active = globalCategoryId === leaf.id;
+              return (
+                <Pressable
+                  key={leaf.id}
+                  style={[styles.chip, styles.leafChip, active && styles.chipActive]}
+                  onPress={() => chooseGlobalCategory(leaf.id)}
+                >
+                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{leaf.name}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        )}
+
+        {/* Specifications — driven by the chosen category's template */}
+        {globalCategoryId !== null && (
+          <>
+            <Text style={styles.sectionTitle}>Specifications</Text>
+
+            {specsLoading ? (
+              <Text style={styles.hint}>Loading specifications…</Text>
+            ) : specFields.length === 0 ? (
+              <Text style={styles.hint}>
+                No specification fields defined for this category yet. You can still save the
+                product — specifications can be filled in once they are added.
+              </Text>
+            ) : (
+              <>
+                <Text style={styles.hint}>
+                  These appear when shoppers compare products in this category. Leave any blank.
+                </Text>
+
+                {specFields.map(f => {
+                  const value = specValues[f.id] ?? '';
+                  return (
+                    <View key={f.id} style={styles.field}>
+                      <Text style={styles.label}>
+                        {f.label}
+                        {f.unit ? ` (${f.unit})` : ''}
+                        {f.isRequired ? ' *' : ''}
+                      </Text>
+
+                      {f.dataType === 'boolean' ? (
+                        // Three states, not two: "not set" is distinct from "No".
+                        <View style={styles.toggle}>
+                          {([['', '—'], ['yes', 'Yes'], ['no', 'No']] as const).map(([v, label]) => {
+                            const active = value === v;
+                            return (
+                              <Pressable
+                                key={v || 'unset'}
+                                style={[styles.toggleBtn, active && styles.toggleBtnActive]}
+                                onPress={() => setSpecValue(f.id, v)}
+                              >
+                                <Text style={[styles.toggleText, active && styles.toggleTextActive]}>
+                                  {label}
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      ) : f.dataType === 'enum' ? (
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          contentContainerStyle={styles.chips}
+                        >
+                          {['', ...f.options].map(o => {
+                            const active = value === o;
+                            return (
+                              <Pressable
+                                key={o || 'unset'}
+                                style={[styles.chip, active && styles.chipActive]}
+                                onPress={() => setSpecValue(f.id, o)}
+                              >
+                                <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                                  {o === '' ? '—' : o}
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                        </ScrollView>
+                      ) : (
+                        <TextInput
+                          style={styles.input}
+                          value={value}
+                          onChangeText={t => setSpecValue(f.id, t)}
+                          keyboardType={f.dataType === 'number' ? 'numeric' : 'default'}
+                          placeholder={f.dataType === 'number' ? '0' : ''}
+                          placeholderTextColor="#9ca3af"
+                          autoCapitalize={f.dataType === 'number' ? 'none' : 'sentences'}
+                        />
+                      )}
+                    </View>
+                  );
+                })}
+
+                {missingRequired.length > 0 && (
+                  <Text style={styles.warn}>
+                    Recommended but empty: {missingRequired.map(f => f.label).join(', ')}. You can
+                    still save.
+                  </Text>
+                )}
+              </>
+            )}
+          </>
+        )}
 
         <View style={styles.field}>
           <Text style={styles.label}>Tags (comma-separated)</Text>
@@ -549,6 +906,7 @@ export default function ProductForm({
         )}
 
         {error !== '' && <Text style={styles.error}>{error}</Text>}
+        {notice !== '' && <Text style={styles.notice}>{notice}</Text>}
 
         <View style={styles.actions}>
           <Pressable style={[styles.btn, styles.cancelBtn]} onPress={() => router.back()} disabled={submitting}>
@@ -612,6 +970,9 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
   chipText: { fontSize: 13, fontWeight: '600', color: '#374151' },
   chipTextActive: { color: '#ffffff' },
+  // Second row of the marketplace picker — indented so the leaves read as
+  // belonging to the top-level chip opened above them.
+  leafChip: { marginLeft: 0, backgroundColor: '#f9fafb' },
 
   variantCard: {
     borderWidth: 1,
@@ -690,6 +1051,8 @@ const styles = StyleSheet.create({
   settingsLink: { fontSize: 14, fontWeight: '700', color: '#0f172a', marginTop: 16, textDecorationLine: 'underline' },
 
   error: { fontSize: 14, fontWeight: '600', color: '#b91c1c', marginTop: 16 },
+  notice: { fontSize: 14, fontWeight: '600', color: '#047857', marginTop: 16 },
+  warn: { fontSize: 13, color: '#b45309', marginTop: 10, lineHeight: 18 },
 
   actions: { flexDirection: 'row', gap: 12, marginTop: 24 },
   btn: { flex: 1, borderRadius: 10, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
