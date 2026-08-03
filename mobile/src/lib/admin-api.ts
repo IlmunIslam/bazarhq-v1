@@ -155,6 +155,122 @@ export function fetchAuditLogs(opts: { action?: string; cursor?: string } = {}) 
   );
 }
 
+// ─── Taxonomy (C1 parity) ─────────────────────────────────────────────────────
+//
+// The global marketplace taxonomy: categories and the spec templates hanging off
+// their leaves. Superadmin-owned, because spec templates decide what makes
+// products comparable ACROSS shops — alignment collapses if merchants edit them.
+//
+// Same eight endpoints the web panel at /superadmin/taxonomy uses. Nothing here
+// deletes: retiring sets isActive=false so products tagged to a category, and
+// any spec values entered against a field, survive and the decision stays
+// reversible.
+
+export type SpecDataType = 'text' | 'number' | 'boolean' | 'enum';
+
+export interface AdminCategory {
+  id: string;
+  slug: string;
+  name: string;
+  parentId: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  specFieldCount: number;
+  productCount: number;
+  childCount: number;
+  children: AdminCategory[];
+}
+
+export interface AdminSpecField {
+  id: string;
+  key: string;
+  label: string;
+  unit: string | null;
+  dataType: SpecDataType;
+  options: string[];
+  sortOrder: number;
+  isComparable: boolean;
+  isRequired: boolean;
+  isActive: boolean;
+  /** How many products hold a value for this field — locks dataType once > 0. */
+  valueCount: number;
+}
+
+export interface AdminCategoryDetail {
+  id: string;
+  slug: string;
+  name: string;
+  parentId: string | null;
+  isActive: boolean;
+  parent: { id: string; name: string; slug: string } | null;
+  childCount: number;
+  productCount: number;
+}
+
+export interface CategoryInput {
+  name?: string;
+  slug?: string;
+  parentId?: string | null;
+  sortOrder?: number;
+  isActive?: boolean;
+}
+
+export interface SpecFieldInput {
+  key?: string;
+  label?: string;
+  unit?: string | null;
+  dataType?: SpecDataType;
+  options?: string[];
+  sortOrder?: number;
+  isComparable?: boolean;
+  isRequired?: boolean;
+  isActive?: boolean;
+}
+
+/** The whole taxonomy INCLUDING retired rows — the admin view. */
+export function fetchAdminCategories() {
+  return adminApi.get<{ categories: AdminCategory[] }>('/admin/categories');
+}
+
+export function createCategory(input: CategoryInput) {
+  return adminApi.post<{ category: AdminCategory }>('/admin/categories', input);
+}
+
+/** Also the restore path: isActive=true brings a retired category back intact. */
+export function updateCategory(id: string, input: CategoryInput) {
+  return adminApi.patch<{ category: AdminCategory }>(`/admin/categories/${id}`, input);
+}
+
+/** Soft delete. Responds with the affected counts so the UI can say what it hid. */
+export function retireCategory(id: string) {
+  return adminApi.delete<{ message: string; productCount: number; childCount: number }>(
+    `/admin/categories/${id}`,
+  );
+}
+
+export function fetchSpecFields(categoryId: string) {
+  return adminApi.get<{ category: AdminCategoryDetail; specFields: AdminSpecField[] }>(
+    `/admin/categories/${categoryId}/spec-fields`,
+  );
+}
+
+export function createSpecField(categoryId: string, input: SpecFieldInput) {
+  return adminApi.post<{ specField: AdminSpecField }>(
+    `/admin/categories/${categoryId}/spec-fields`,
+    input,
+  );
+}
+
+/** `key` is permanently immutable — the API rejects any request carrying it. */
+export function updateSpecField(id: string, input: SpecFieldInput) {
+  return adminApi.patch<{ specField: AdminSpecField }>(`/admin/spec-fields/${id}`, input);
+}
+
+/** Soft delete — values already entered against the field are preserved. */
+export function retireSpecField(id: string) {
+  return adminApi.delete<{ message: string; valueCount: number }>(`/admin/spec-fields/${id}`);
+}
+
 // ─── Formatting helpers (shared by the admin screens) ────────────────────────
 
 export function formatMoney(value: string | number): string {

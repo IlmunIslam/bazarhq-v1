@@ -211,6 +211,7 @@ function LoginFlow() {
 const LINKS = [
   { href: '/superadmin/merchants', icon: 'people-outline', title: 'Merchants', sub: 'Suspend, activate, verify' },
   { href: '/superadmin/analytics', icon: 'bar-chart-outline', title: 'Platform analytics', sub: 'Revenue, orders, growth' },
+  { href: '/superadmin/taxonomy', icon: 'pricetags-outline', title: 'Taxonomy', sub: 'Categories and spec templates' },
   { href: '/superadmin/announcements', icon: 'megaphone-outline', title: 'Announcements', sub: 'Create and manage notices' },
   { href: '/superadmin/audit-logs', icon: 'document-text-outline', title: 'Audit logs', sub: 'Every admin action, logged' },
 ] as const;

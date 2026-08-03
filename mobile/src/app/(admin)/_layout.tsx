@@ -29,6 +29,8 @@ export default function AdminStackLayout() {
         <Stack.Screen name="superadmin/analytics" options={{ title: 'Platform analytics' }} />
         <Stack.Screen name="superadmin/announcements" options={{ title: 'Announcements' }} />
         <Stack.Screen name="superadmin/audit-logs" options={{ title: 'Audit logs' }} />
+        <Stack.Screen name="superadmin/taxonomy/index" options={{ title: 'Taxonomy' }} />
+        <Stack.Screen name="superadmin/taxonomy/[id]" options={{ title: 'Spec fields' }} />
       </Stack>
     </AdminAuthProvider>
   );
