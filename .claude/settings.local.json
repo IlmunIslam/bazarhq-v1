@@ -88,7 +88,8 @@
       "Bash(grep -oE '\\\\| `/superadmin/taxonomy\\\\$' .expo/types/router.d.ts)",
       "Bash(grep -oE \"adminApi\\\\.\\(get|post|patch|delete\\)<[^>]*>\\\\\\(\\\\s*\\\\`?'?[^'\\\\`,\\)]*\")",
       "Bash(grep -oE \"/admin/[a-z/{}$.\\\\[\\\\]-]*\")",
-      "Bash(grep -oE \"'/admin/[^']*'|\\\\`/admin/[^\\\\`]*\\\\`\")"
+      "Bash(grep -oE \"'/admin/[^']*'|\\\\`/admin/[^\\\\`]*\\\\`\")",
+      "Bash(python -)"
     ]
   }
 }
