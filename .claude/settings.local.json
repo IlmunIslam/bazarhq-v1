@@ -89,7 +89,8 @@
       "Bash(grep -oE \"adminApi\\\\.\\(get|post|patch|delete\\)<[^>]*>\\\\\\(\\\\s*\\\\`?'?[^'\\\\`,\\)]*\")",
       "Bash(grep -oE \"/admin/[a-z/{}$.\\\\[\\\\]-]*\")",
       "Bash(grep -oE \"'/admin/[^']*'|\\\\`/admin/[^\\\\`]*\\\\`\")",
-      "Bash(python -)"
+      "Bash(python -)",
+      "Bash(grep -n \"Could not reorder\\\\|const results = await Promise.all\\\\|alert-\\\\${notice.type}\" app/superadmin/taxonomy/page.tsx \"app/superadmin/taxonomy/[id]/page.tsx\")"
     ]
   }
 }
