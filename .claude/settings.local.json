@@ -84,7 +84,11 @@
       "Bash(echo \"--- lint exit: $? ---\")",
       "Bash(echo \"--- export exit: $? ---\")",
       "Bash(grep -oE '\\\\{ pathname: `\\\\$\\\\{.\\\\\\(customer\\\\\\).\\\\}/compare`[^}]*\\\\}' .expo/types/router.d.ts)",
-      "Bash(grep -oE '\\\\| `/compare\\\\$' .expo/types/router.d.ts)"
+      "Bash(grep -oE '\\\\| `/compare\\\\$' .expo/types/router.d.ts)",
+      "Bash(grep -oE '\\\\| `/superadmin/taxonomy\\\\$' .expo/types/router.d.ts)",
+      "Bash(grep -oE \"adminApi\\\\.\\(get|post|patch|delete\\)<[^>]*>\\\\\\(\\\\s*\\\\`?'?[^'\\\\`,\\)]*\")",
+      "Bash(grep -oE \"/admin/[a-z/{}$.\\\\[\\\\]-]*\")",
+      "Bash(grep -oE \"'/admin/[^']*'|\\\\`/admin/[^\\\\`]*\\\\`\")"
     ]
   }
 }
