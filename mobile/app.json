@@ -53,6 +53,16 @@
     },
     "runtimeVersion": {
       "policy": "fingerprint"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "929ac2e6-07a3-4d8e-9d6f-4f1c111d9ee5"
+      }
+    },
+    "owner": "ilmun_islam",
+    "updates": {
+      "url": "https://u.expo.dev/929ac2e6-07a3-4d8e-9d6f-4f1c111d9ee5"
     }
   }
 }
