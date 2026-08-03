@@ -205,14 +205,22 @@ export default function AdminSpecFieldsScreen() {
     next.splice(target, 0, moved);
 
     setBusyId(fields[index].id);
-    await Promise.all(
+    const results = await Promise.all(
       next
         .map((f, i) => ({ f, i }))
         .filter(({ f, i }) => f.sortOrder !== i)
         .map(({ f, i }) => updateSpecField(f.id, { sortOrder: i })),
     );
     setBusyId(null);
-    load();
+
+    // Reload FIRST — it clears `error` on entry — then report. A partially
+    // applied reorder used to revert silently, leaving the admin to wonder why
+    // their tap did nothing.
+    await load();
+    const failed = results.find(r => !r.success);
+    if (failed && !failed.success) {
+      setError(`Could not reorder: ${failed.error.message}`);
+    }
   };
 
   const typeLocked = !!editing && editing.valueCount > 0;

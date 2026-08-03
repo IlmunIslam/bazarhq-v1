@@ -35,7 +35,10 @@ export default function CompareToggle({ product }: { product: MarketplaceProduct
       type="button"
       onClick={handleClick}
       aria-pressed={selected}
-      aria-disabled={blocked}
+      // Genuinely disabled, not just aria-disabled: it was still taking keyboard
+      // focus and firing a click the handler silently swallowed. The tray
+      // explains the cap, so nothing is lost by taking it out of the tab order.
+      disabled={blocked}
       title={
         blocked
           ? `You can compare up to ${limit} products. Remove one to add another.`

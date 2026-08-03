@@ -33,6 +33,8 @@ export default function CompareScreen() {
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [diffOnly, setDiffOnly] = useState(false);
+  // Pruning used to be silent: the selection just shrank with no explanation.
+  const [droppedCount, setDroppedCount] = useState(0);
 
   // Keyed on the joined ids rather than the array, which is a new reference
   // every render.
@@ -58,6 +60,7 @@ export default function CompareScreen() {
     setData(res.data);
 
     if (res.data.droppedIds.length > 0) {
+      setDroppedCount(n => n + res.data.droppedIds.length);
       await keepOnly(res.data.products.map(p => p.id));
     }
   }, [idKey, keepOnly]);
@@ -94,6 +97,12 @@ export default function CompareScreen() {
     return (
       <View style={styles.center}>
         {failed && <Text style={styles.error}>Could not load the comparison. Your selection is safe.</Text>}
+        {droppedCount > 0 && (
+          <Text style={styles.muted}>
+            {droppedCount} product{droppedCount === 1 ? '' : 's'} you had selected{' '}
+            {droppedCount === 1 ? 'is' : 'are'} no longer available.
+          </Text>
+        )}
         <Text style={styles.emptyTitle}>Nothing to compare</Text>
         <Text style={styles.muted}>
           Tap Compare on products in the marketplace to build a shortlist.
@@ -183,6 +192,13 @@ export default function CompareScreen() {
           </View>
         ))}
       </View>
+
+      {droppedCount > 0 && (
+        <Text style={styles.banner}>
+          {droppedCount} product{droppedCount === 1 ? ' is' : 's are'} no longer available and{' '}
+          {droppedCount === 1 ? 'was' : 'were'} removed from your comparison.
+        </Text>
+      )}
 
       {mode === 'mixed' && (
         <Text style={styles.banner}>

@@ -1635,6 +1635,8 @@ a { color: inherit; }
 
 .sf-pd-low-stock { font-size: 0.8125rem; font-weight: 500; color: #b45309; margin-bottom: 1rem; }
 
+.sf-pd-compare { margin-bottom: 1rem; }
+
 .sf-pd-description { margin-top: 2rem; border-top: 1px solid #ececed; padding-top: 1.5rem; }
 .sf-pd-desc-text { font-size: 0.9375rem; color: #374151; line-height: 1.75; white-space: pre-line; }
 
@@ -3266,18 +3268,50 @@ a { color: inherit; }
 
 .cmp-toggle:hover { border-color: var(--color-primary); }
 
+/* These sit on top of a product image, so the browser default outline is easy
+   to lose — make focus unmistakable for keyboard users. */
+.cmp-toggle:focus-visible,
+.cmp-inline-toggle:focus-visible,
+.cmp-tray-remove:focus-visible,
+.cmp-col-remove:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 .cmp-toggle.is-on {
   background: var(--color-primary);
   border-color: var(--color-primary);
   color: #ffffff;
 }
 
-/* At the cap: still visible and still explains itself via title/aria, but
-   clearly not actionable. */
-.cmp-toggle.is-blocked {
+/* At the cap: still visible, clearly not actionable. The tray explains why. */
+.cmp-toggle.is-blocked,
+.cmp-toggle:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+/* Inline variant for the storefront product page — a normal button in the
+   actions row, not a pill floating over a card image. */
+.cmp-inline-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--sf-border, var(--color-border));
+  border-radius: 8px;
+  background: transparent;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.cmp-inline-toggle:hover:not(:disabled) { border-color: currentColor; }
+.cmp-inline-toggle.is-on { background: rgba(0, 0, 0, 0.06); }
+.cmp-inline-toggle:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .cmp-toggle-box {
   display: inline-flex;

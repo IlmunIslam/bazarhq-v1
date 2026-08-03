@@ -12,6 +12,7 @@ import {
 
 import { api } from '@/lib/api-client';
 import { useCart } from '@/lib/cart-context';
+import { useCompare } from '@/lib/compare-context';
 
 // One product's detail (Sprint 2), scoped to the :subdomain route param. Image
 // gallery, variant selector (first preselected, sold-out disabled), quantity
@@ -44,6 +45,10 @@ interface ProductDetail {
 export default function ProductDetailScreen() {
   const { subdomain, slug } = useLocalSearchParams<{ subdomain: string; slug: string }>();
   const { add } = useCart();
+  // CompareProvider is mounted in (customer)/_layout, above the shop stack, so
+  // it is already in scope here — and the tray it feeds already floats over
+  // these screens. Only the toggle was missing.
+  const { isSelected, isFull, toggle: toggleCompare } = useCompare();
   const router = useRouter();
 
   const [product, setProduct] = useState<ProductDetail | null>(null);
@@ -280,6 +285,36 @@ export default function ProductDetailScreen() {
             <Text style={styles.lowStock}>Only {displayStock} left in stock</Text>
           )}
 
+          {/* Compare against products from other shops. `shop.name` is not on
+              this screen's payload, so the subdomain stands in — nothing
+              displays the stored name, and the comparison view uses the
+              authoritative one from the API. */}
+          <Pressable
+            style={[
+              styles.compareBtn,
+              isSelected(product.id) && styles.compareBtnOn,
+              !isSelected(product.id) && isFull && styles.compareBtnBlocked,
+            ]}
+            disabled={!isSelected(product.id) && isFull}
+            accessibilityRole="button"
+            accessibilityState={{ selected: isSelected(product.id) }}
+            onPress={() =>
+              void toggleCompare({
+                id: product.id,
+                name: product.name,
+                slug: product.slug,
+                basePrice: product.basePrice,
+                compareAtPrice: product.compareAtPrice,
+                image: product.images[0]?.url ?? null,
+                shop: { name: subdomain, subdomain },
+              })
+            }
+          >
+            <Text style={[styles.compareText, isSelected(product.id) && styles.compareTextOn]}>
+              {isSelected(product.id) ? '✓ In comparison' : '+ Compare'}
+            </Text>
+          </Pressable>
+
           {product.description ? (
             <View style={styles.section}>
               <Text style={styles.label}>Description</Text>
@@ -407,6 +442,20 @@ const styles = StyleSheet.create({
   },
   cartCtaText: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
   cartCtaArrow: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
+
+  compareBtn: {
+    marginTop: 12,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+  },
+  compareBtnOn: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
+  compareBtnBlocked: { opacity: 0.45 },
+  compareText: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
+  compareTextOn: { color: '#ffffff' },
 
   lowStock: { fontSize: 13, color: '#b45309', marginTop: 10, fontWeight: '600' },
   descText: { fontSize: 15, color: '#374151', lineHeight: 22 },

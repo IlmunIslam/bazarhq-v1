@@ -49,7 +49,7 @@ export default function TaxonomyPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [fetching, setFetching] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState(BLANK);
@@ -92,9 +92,11 @@ export default function TaxonomyPage() {
     );
   });
 
-  const flash = (text: string) => {
-    setNotice(text);
-    setTimeout(() => setNotice(''), 3500);
+  // `type` matters: these were all rendering as a green success banner, so a
+  // failed retire looked like it had worked.
+  const flash = (text: string, type: 'success' | 'error' = 'success') => {
+    setNotice({ text, type });
+    setTimeout(() => setNotice(null), 3500);
   };
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -175,7 +177,7 @@ export default function TaxonomyPage() {
       flash(`"${node.name}" retired`);
       load();
     } else {
-      flash(errMsg(res, 'Could not retire the category'));
+      flash(errMsg(res, 'Could not retire the category'), 'error');
     }
   };
 
@@ -187,7 +189,7 @@ export default function TaxonomyPage() {
       flash(`"${node.name}" restored`);
       load();
     } else {
-      flash(errMsg(res, 'Could not restore the category'));
+      flash(errMsg(res, 'Could not restore the category'), 'error');
     }
   };
 
@@ -203,13 +205,18 @@ export default function TaxonomyPage() {
     next.splice(target, 0, moved);
 
     setBusyId(row.node.id);
-    await Promise.all(
+    const results = await Promise.all(
       next
         .map((s, i) => ({ s, i }))
         .filter(({ s, i }) => s.sortOrder !== i)
         .map(({ s, i }) => api.patch(`/admin/categories/${s.id}`, { sortOrder: i }))
     );
     setBusyId(null);
+
+    // A partially applied reorder used to revert silently on reload, leaving the
+    // admin to wonder why their click did nothing.
+    const failed = results.find(r => !r.success);
+    if (failed) flash(errMsg(failed, 'Could not reorder'), 'error');
     load();
   };
 
@@ -232,7 +239,9 @@ export default function TaxonomyPage() {
         </p>
 
         {notice && (
-          <div className="alert alert-success" style={{ marginBottom: '1rem' }}>{notice}</div>
+          <div className={`alert alert-${notice.type}`} style={{ marginBottom: '1rem' }}>
+            {notice.text}
+          </div>
         )}
 
         {showCreate && (

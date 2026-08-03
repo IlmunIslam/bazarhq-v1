@@ -49,17 +49,26 @@ router.get('/', publicRateLimit, async (req, res) => {
     },
   });
 
-  const categories = rows.map(({ _count, ...c }) => ({
+  const active = rows.map(({ _count, ...c }) => ({
     ...c,
     specFieldCount: _count.specFields,
   }));
 
+  // Retiring a parent hides its whole branch, so a child whose parent is no
+  // longer active is unreachable and must not be offered anywhere.
+  //
+  // The tree has always dropped these (the lookup below simply finds no parent
+  // to attach to), but the flat list used to return them — the two modes agreed
+  // only by accident. Deriving both from one reachable set makes them agree by
+  // construction. The tree's output is unchanged.
+  const activeIds = new Set(active.map(c => c.id));
+  const categories = active.filter(c => !c.parentId || activeIds.has(c.parentId));
+
   if (req.query.flat) return ok(res, { categories });
 
-  // Build the tree in memory rather than with a recursive query: the taxonomy is
-  // a curated list of tens of rows, not thousands, and this keeps it to one
-  // round trip. A child whose parent is inactive is dropped rather than
-  // promoted to the top level — hiding a parent hides its branch.
+  // Built in memory rather than with a recursive query: the taxonomy is a
+  // curated list of tens of rows, not thousands, and this keeps it to one round
+  // trip.
   const byId = new Map(categories.map(c => [c.id, { ...c, children: [] as typeof categories }]));
   const tree: (typeof categories[number] & { children: typeof categories })[] = [];
 

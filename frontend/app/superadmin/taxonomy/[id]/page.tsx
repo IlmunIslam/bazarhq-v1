@@ -80,7 +80,7 @@ export default function SpecFieldsPage() {
   const [fetching, setFetching] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [saving, setSaving] = useState(false);
 
   const [showCreate, setShowCreate] = useState(false);
@@ -114,9 +114,11 @@ export default function SpecFieldsPage() {
     load();
   }, [admin, load]);
 
-  const flash = (text: string) => {
-    setNotice(text);
-    setTimeout(() => setNotice(''), 3500);
+  // `type` matters: these were all rendering as a green success banner, so a
+  // failed retire looked like it had worked.
+  const flash = (text: string, type: 'success' | 'error' = 'success') => {
+    setNotice({ text, type });
+    setTimeout(() => setNotice(null), 3500);
   };
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -219,7 +221,7 @@ export default function SpecFieldsPage() {
       flash(`"${field.label}" retired`);
       load();
     } else {
-      flash(errMsg(res, 'Could not retire the field'));
+      flash(errMsg(res, 'Could not retire the field'), 'error');
     }
   };
 
@@ -231,7 +233,7 @@ export default function SpecFieldsPage() {
       flash(`"${field.label}" restored`);
       load();
     } else {
-      flash(errMsg(res, 'Could not restore the field'));
+      flash(errMsg(res, 'Could not restore the field'), 'error');
     }
   };
 
@@ -246,13 +248,18 @@ export default function SpecFieldsPage() {
     next.splice(target, 0, moved);
 
     setBusyId(fields[index].id);
-    await Promise.all(
+    const results = await Promise.all(
       next
         .map((f, i) => ({ f, i }))
         .filter(({ f, i }) => f.sortOrder !== i)
         .map(({ f, i }) => api.patch(`/admin/spec-fields/${f.id}`, { sortOrder: i }))
     );
     setBusyId(null);
+
+    // A partially applied reorder used to revert silently on reload, leaving the
+    // admin to wonder why their click did nothing.
+    const failed = results.find(r => !r.success);
+    if (failed) flash(errMsg(failed, 'Could not reorder'), 'error');
     load();
   };
 
@@ -295,7 +302,11 @@ export default function SpecFieldsPage() {
               )}
             </div>
 
-            {notice && <div className="alert alert-success" style={{ marginBottom: '1rem' }}>{notice}</div>}
+            {notice && (
+              <div className={`alert alert-${notice.type}`} style={{ marginBottom: '1rem' }}>
+                {notice.text}
+              </div>
+            )}
 
             {category.childCount > 0 ? (
               <div className="sa-card" style={{ padding: '1.25rem' }}>

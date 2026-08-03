@@ -35,6 +35,8 @@ export default function ComparePage() {
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [diffOnly, setDiffOnly] = useState(false);
+  // Pruning used to be silent: the selection just shrank with no explanation.
+  const [droppedCount, setDroppedCount] = useState(0);
 
   // Keyed on the joined ids rather than the array, which is a fresh reference
   // every render.
@@ -72,6 +74,7 @@ export default function ComparePage() {
       // Prune anything the server could not serve. This re-runs the effect once
       // with the corrected ids, which then reports no drops and settles.
       if (result.droppedIds.length > 0) {
+        setDroppedCount(n => n + result.droppedIds.length);
         keepOnly(result.products.map(p => p.id));
       }
     });
@@ -134,6 +137,13 @@ export default function ComparePage() {
           <div className="alert alert-error">
             Could not load the comparison. Your selection is safe — try again.
           </div>
+        )}
+
+        {droppedCount > 0 && (
+          <p className="cmp-banner">
+            {droppedCount} product{droppedCount === 1 ? ' is' : 's are'} no longer available and{' '}
+            {droppedCount === 1 ? 'was' : 'were'} removed from your comparison.
+          </p>
         )}
 
         {!ready || loading ? (

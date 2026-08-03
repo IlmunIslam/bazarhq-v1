@@ -161,14 +161,22 @@ export default function AdminTaxonomyScreen() {
     next.splice(target, 0, moved);
 
     setBusyId(siblings[index].id);
-    await Promise.all(
+    const results = await Promise.all(
       next
         .map((c, i) => ({ c, i }))
         .filter(({ c, i }) => c.sortOrder !== i)
         .map(({ c, i }) => updateCategory(c.id, { sortOrder: i })),
     );
     setBusyId(null);
-    load();
+
+    // Reload FIRST — it clears `error` on entry — then report. A partially
+    // applied reorder used to revert silently, leaving the admin to wonder why
+    // their tap did nothing.
+    await load();
+    const failed = results.find(r => !r.success);
+    if (failed && !failed.success) {
+      setError(`Could not reorder: ${failed.error.message}`);
+    }
   };
 
   const renderRow = (c: AdminCategory, siblings: AdminCategory[], index: number, depth: number) => {

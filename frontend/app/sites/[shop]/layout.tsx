@@ -1,4 +1,5 @@
 import StorefrontShell, { type ShopData, type ThemeData, type CategoryData } from './_components/StorefrontShell';
+import CompareTray from '../../marketplace/_components/CompareTray';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/v1';
 
@@ -47,6 +48,11 @@ export default async function ShopLayout({
       paymentMethods={data.paymentMethods}
     >
       {children}
+      {/* The comparison tray follows the customer into a shop, so a Compare tap
+          on a product page has somewhere to go. Deliberately in the platform's
+          own neutral styling rather than the merchant's theme: it belongs to the
+          marketplace, not to this shop. */}
+      <CompareTray />
     </StorefrontShell>
   );
 }

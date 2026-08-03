@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import CompareToggleInline from '../../_components/CompareToggleInline';
 import Link from 'next/link';
 import { useShop, useCart } from '../../_components/StorefrontShell';
 import { shopHref } from '../../_components/shop-href';
@@ -252,6 +253,23 @@ export default function ProductDetailPage() {
           {inStock && displayStock <= 5 && (
             <p className="sf-pd-low-stock">Only {displayStock} left in stock</p>
           )}
+
+          {/* Compare against products from other shops. The tray lives in the
+              storefront layout, so this is not a dead end. */}
+          <div className="sf-pd-compare">
+            <CompareToggleInline
+              product={{
+                id: product.id,
+                name: product.name,
+                slug: product.slug,
+                basePrice: product.basePrice,
+                compareAtPrice: product.compareAtPrice,
+                image: product.images[0]?.url ?? null,
+                shopName: shop.name,
+                subdomain,
+              }}
+            />
+          </div>
 
           {/* Description */}
           {product.description && (
