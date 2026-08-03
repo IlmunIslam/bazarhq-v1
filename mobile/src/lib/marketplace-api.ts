@@ -63,3 +63,47 @@ export function fetchMarketplaceShops(
   if (opts.offset) params.set('offset', String(opts.offset));
   return api.get<ShopsPage>(`/marketplace/shops?${params}`);
 }
+
+// ─── Comparison (Sprint C5) ──────────────────────────────────────────────────
+//
+// Same endpoint and same shapes the web comparison uses
+// (frontend/app/marketplace/_components/api.ts).
+
+export type SpecDataType = 'text' | 'number' | 'boolean' | 'enum';
+
+export interface CompareSpecRow {
+  specFieldId: string;
+  key: string;
+  label: string;
+  unit: string | null;
+  dataType: SpecDataType;
+  categoryId: string;
+}
+
+export interface CompareProduct {
+  id: string;
+  name: string;
+  slug: string;
+  basePrice: string;
+  compareAtPrice: string | null;
+  image: string | null;
+  shop: { name: string; subdomain: string };
+  category: { id: string; name: string; slug: string } | null;
+  /** Keyed by specFieldId. Numbers arrive as strings; booleans as real booleans. */
+  specs: Record<string, string | boolean>;
+}
+
+export interface ComparePayload {
+  products: CompareProduct[];
+  specRows: CompareSpecRow[];
+  categories: { id: string; name: string; slug: string }[];
+  /** Set only when every product shares one live category — picks the render mode. */
+  sharedCategoryId: string | null;
+  /** Ids the server could not serve (stale, unpublished, deleted). */
+  droppedIds: string[];
+}
+
+/** Resolve the comparison tray into renderable data. */
+export function fetchComparison(ids: string[]) {
+  return api.get<ComparePayload>(`/marketplace/compare?ids=${ids.join(',')}`);
+}

@@ -6,6 +6,7 @@ import {
   addToCompare,
   clearCompare,
   getCompare,
+  keepOnlyInCompare,
   removeFromCompare,
   COMPARE_LIMIT,
   type CompareItem,
@@ -31,6 +32,8 @@ interface CompareContextValue {
   toggle: (item: CompareItem) => string | null;
   remove: (id: string) => void;
   clear: () => void;
+  /** Drops anything not in `ids` — used to prune selections the server dropped. */
+  keepOnly: (ids: string[]) => void;
 }
 
 const CompareContext = createContext<CompareContextValue | null>(null);
@@ -63,6 +66,7 @@ export function CompareProvider({ children }: { children: ReactNode }) {
 
   const remove = useCallback((id: string) => setItems(removeFromCompare(id)), []);
   const clear = useCallback(() => setItems(clearCompare()), []);
+  const keepOnly = useCallback((ids: string[]) => setItems(keepOnlyInCompare(ids)), []);
 
   const value = useMemo(
     () => ({
@@ -74,8 +78,9 @@ export function CompareProvider({ children }: { children: ReactNode }) {
       toggle,
       remove,
       clear,
+      keepOnly,
     }),
-    [items, ready, isSelected, toggle, remove, clear]
+    [items, ready, isSelected, toggle, remove, clear, keepOnly]
   );
 
   return <CompareContext.Provider value={value}>{children}</CompareContext.Provider>;

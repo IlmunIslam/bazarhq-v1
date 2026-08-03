@@ -79,3 +79,18 @@ export function clearCompare(): CompareItem[] {
   save([]);
   return [];
 }
+
+/**
+ * Drops anything not in `ids`, in one write.
+ *
+ * Used after the compare endpoint reports which selections it could not serve —
+ * a product that was unpublished or deleted since it was picked would otherwise
+ * sit in the tray forever, since the tray is client-side storage with no idea
+ * the catalogue moved on.
+ */
+export function keepOnlyInCompare(ids: string[]): CompareItem[] {
+  const keep = new Set(ids);
+  const next = getCompare().filter(i => keep.has(i.id));
+  save(next);
+  return next;
+}

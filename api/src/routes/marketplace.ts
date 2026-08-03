@@ -160,4 +160,169 @@ router.get('/products', publicRateLimit, async (req, res) => {
   });
 });
 
+// ─── Comparison (Sprint C5) ──────────────────────────────────────────────────
+//
+// GET /v1/marketplace/compare?ids=a,b,c,d
+//
+// Resolves the client-side comparison tray into something renderable: current
+// authoritative product data, each product's global category, and its spec
+// values — plus the merged, ordered spec rows both clients draw, so neither has
+// to re-derive the alignment rule.
+//
+// Same isolation as every other route in this file: active products in published
+// shops only. Ids that are stale, hidden or deleted are DROPPED rather than
+// errored — the tray is client-side storage that can outlive a product, and a
+// saved comparison link should degrade, not 404. They come back in `droppedIds`
+// so the client can prune its tray; it is information, not a failure.
+
+const MAX_COMPARE = 4;
+
+type SpecValue = string | boolean;
+
+function serialiseSpec(row: {
+  valueText: string | null;
+  valueNumber: Prisma.Decimal | null;
+  valueBool: boolean | null;
+}): SpecValue | null {
+  // Numbers as strings, exactly as GET /products/:id/specs returns them: the
+  // column is numeric(14,4), and routing it through a JS float would be a silent
+  // precision trap. Clients format using `unit` from specRows.
+  if (row.valueNumber !== null) return row.valueNumber.toString();
+  if (row.valueBool !== null) return row.valueBool;
+  return row.valueText;
+}
+
+router.get('/compare', publicRateLimit, async (req, res) => {
+  const requested = [
+    ...new Set(
+      String(req.query.ids ?? '')
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean)
+    ),
+  ].slice(0, MAX_COMPARE);
+
+  const empty = {
+    products: [] as unknown[],
+    specRows: [] as unknown[],
+    categories: [] as unknown[],
+    sharedCategoryId: null,
+    droppedIds: [] as string[],
+  };
+  if (requested.length === 0) return ok(res, empty);
+
+  const rows = await prisma.product.findMany({
+    where: { id: { in: requested }, status: 'active', shop: { status: 'published' } },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      basePrice: true,
+      compareAtPrice: true,
+      images: { orderBy: { sortOrder: 'asc' }, take: 1, select: { url: true } },
+      shop: { select: { name: true, subdomain: true } },
+      globalCategory: { select: { id: true, name: true, slug: true, isActive: true } },
+      specs: {
+        select: {
+          specFieldId: true,
+          valueText: true,
+          valueNumber: true,
+          valueBool: true,
+          specField: { select: { categoryId: true, isActive: true, isComparable: true } },
+        },
+      },
+    },
+  });
+
+  // Prisma's `in` does not preserve argument order, and the tray's order is the
+  // one the customer built — so re-key and walk the request.
+  const byId = new Map(rows.map(r => [r.id, r]));
+  const found = requested.map(id => byId.get(id)).filter((r): r is (typeof rows)[number] => !!r);
+  const droppedIds = requested.filter(id => !byId.has(id));
+
+  // A category an admin has retired is hidden everywhere else public (see
+  // GET /v1/categories), so for comparison purposes such a product counts as
+  // uncategorised: no category, no spec rows. Its values stay in the database
+  // and reappear if the category is restored.
+  const liveCategory = (p: (typeof rows)[number]) =>
+    p.globalCategory && p.globalCategory.isActive ? p.globalCategory : null;
+
+  // Category order follows first appearance among the products, so the grouped
+  // rendering matches the column order the customer sees.
+  const categories: { id: string; name: string; slug: string }[] = [];
+  for (const p of found) {
+    const c = liveCategory(p);
+    if (c && !categories.some(x => x.id === c.id)) {
+      categories.push({ id: c.id, name: c.name, slug: c.slug });
+    }
+  }
+
+  const fields = categories.length
+    ? await prisma.specField.findMany({
+        where: {
+          categoryId: { in: categories.map(c => c.id) },
+          isActive: true,
+          // isComparable is exactly this decision: a field the admin marked as
+          // not worth a comparison row (wash care, ingredients) stays off it.
+          isComparable: true,
+        },
+        select: {
+          id: true,
+          key: true,
+          label: true,
+          unit: true,
+          dataType: true,
+          categoryId: true,
+          sortOrder: true,
+        },
+      })
+    : [];
+
+  const categoryRank = new Map(categories.map((c, i) => [c.id, i]));
+  const specRows = fields
+    .sort(
+      (a, b) =>
+        (categoryRank.get(a.categoryId) ?? 0) - (categoryRank.get(b.categoryId) ?? 0) ||
+        a.sortOrder - b.sortOrder ||
+        a.label.localeCompare(b.label)
+    )
+    .map(({ id, sortOrder: _sortOrder, ...f }) => ({ specFieldId: id, ...f }));
+
+  const products = found.map(p => {
+    const category = liveCategory(p);
+
+    const specs: Record<string, SpecValue> = {};
+    for (const s of p.specs) {
+      // Skip retired and non-comparable fields, and any value left over from a
+      // category the product no longer belongs to.
+      if (!s.specField.isActive || !s.specField.isComparable) continue;
+      if (!category || s.specField.categoryId !== category.id) continue;
+      const value = serialiseSpec(s);
+      if (value !== null) specs[s.specFieldId] = value;
+    }
+
+    return {
+      id: p.id,
+      name: p.name,
+      slug: p.slug,
+      basePrice: p.basePrice.toString(),
+      compareAtPrice: p.compareAtPrice?.toString() ?? null,
+      image: p.images[0]?.url ?? null,
+      shop: p.shop,
+      category: category ? { id: category.id, name: category.name, slug: category.slug } : null,
+      specs,
+    };
+  });
+
+  // The single signal that picks the render mode, so neither client re-derives
+  // the rule: set only when every product shares one live category.
+  const first = products[0]?.category?.id ?? null;
+  const sharedCategoryId =
+    products.length > 0 && first !== null && products.every(p => p.category?.id === first)
+      ? first
+      : null;
+
+  return ok(res, { products, specRows, categories, sharedCategoryId, droppedIds });
+});
+
 export default router;

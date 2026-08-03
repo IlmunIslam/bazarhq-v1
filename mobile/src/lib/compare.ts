@@ -82,3 +82,18 @@ export async function clearCompare(): Promise<CompareItem[]> {
   await save([]);
   return [];
 }
+
+/**
+ * Drops anything not in `ids`, in one write.
+ *
+ * Used after the compare endpoint reports which selections it could not serve —
+ * a product unpublished or deleted since it was picked would otherwise sit in
+ * the tray forever, since the tray is on-device storage with no idea the
+ * catalogue moved on.
+ */
+export async function keepOnlyInCompare(ids: string[]): Promise<CompareItem[]> {
+  const keep = new Set(ids);
+  const next = (await getCompare()).filter(i => keep.has(i.id));
+  await save(next);
+  return next;
+}
