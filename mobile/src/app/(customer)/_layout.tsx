@@ -24,7 +24,9 @@ export default function CustomerStackLayout() {
             headerShadowVisible: false,
           }}
         >
-          <Stack.Screen name="index" options={{ title: 'Marketplace' }} />
+          {/* TEMPORARY — OTA delivery test. Revert to 'Marketplace' and publish
+              another update once the change has been confirmed on a device. */}
+          <Stack.Screen name="index" options={{ title: 'Marketplace ✅ OTA' }} />
           <Stack.Screen name="shop/[subdomain]" options={{ headerShown: false }} />
           <Stack.Screen name="compare" options={{ title: 'Compare' }} />
         </Stack>
