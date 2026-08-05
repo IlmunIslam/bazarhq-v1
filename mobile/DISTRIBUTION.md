@@ -97,6 +97,22 @@ The alternative policy is `"appVersion"`, where the runtime version is just
 `expo.version` and you decide compatibility by hand — more flexible, and it fails
 by crashing real devices when you forget. Fingerprint was chosen deliberately.
 
+### Checking whether an update will actually reach a build
+
+```bash
+eas fingerprint:compare --build-id <build-id>
+```
+
+Compares the installed build's fingerprint against the current working
+directory and says plainly whether they match. Run it before publishing if you
+are unsure whether a change was native.
+
+**Do not use `npx expo-updates fingerprint:generate` for this.** It computes a
+different hash from the one EAS records for a build — it does not resolve the
+build profile's environment the same way — so comparing the two by hand reports
+a mismatch that isn't real. Only `eas fingerprint:compare` reflects what the
+device will actually accept.
+
 ### Worked examples from this project's history
 
 | Change | OTA or rebuild? | Why |
