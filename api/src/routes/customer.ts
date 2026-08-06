@@ -1,18 +1,12 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { publicRateLimit } from '../middleware/rate-limiter';
 import { requireCustomer } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { ok, created, fail } from '../utils/response';
-import { signToken } from '../utils/jwt';
-import { authCookieOptions, clearCookieOptions } from '../utils/cookies';
+import { clearCookieOptions } from '../utils/cookies';
 import { prisma } from '../lib/prisma';
 
 const router = Router();
-
-const LoginSchema = z.object({
-  phone: z.string().regex(/^01[3-9]\d{8}$/, 'Must be a valid Bangladeshi phone number'),
-});
 
 const AddressSchema = z.object({
   label: z.string().max(50).optional(),
@@ -26,34 +20,32 @@ const AddressSchema = z.object({
 });
 
 // ─── POST /v1/customer/auth/login ─────────────────────────────────────────────
-// Phone-based auth: if the phone has placed at least one order, issue a JWT.
+//
+// DISABLED — this endpoint was an authentication bypass.
+//
+// It accepted only `{ phone }` and, if ANY order existed with that phone number,
+// minted a 30-day customer JWT with no credential of any kind. Bangladeshi mobile
+// numbers are an 11-digit space behind a known `01[3-9]` prefix, and any merchant
+// who has taken one order from a customer knows theirs — so a merchant could mint
+// a token for that customer and read their order history at COMPETING shops, plus
+// their saved delivery addresses. The token also carried no session row, so it was
+// irrevocable for its full 30 days (see requireCustomer in middleware/auth.ts).
+//
+// The route, its URL and this file are deliberately KEPT so the real customer
+// account system (email + password + signup-time email OTP) can land here without
+// re-carving the URL space. See docs/customer-accounts-plan.md §1.3 and Sprint 6.
+//
+// Customers who want to look up an order still can, with proof: GET /v1/orders/track
+// requires an order NUMBER as well as the phone, and returns only that one order.
 
-router.post('/auth/login', publicRateLimit, validate(LoginSchema), async (req, res) => {
-  const { phone } = req.body as { phone: string };
-
-  const orderCount = await prisma.order.count({ where: { customerPhone: phone } });
-  if (orderCount === 0) {
-    return fail(res, 404, 'NO_ORDERS', 'No orders found for this phone number. Place an order first to create an account.');
-  }
-
-  const { token, jti } = signToken({ sub: phone, role: 'customer' });
-
-  // No session row for customers in demo (stateless JWT)
-  void jti; // jti embedded in token for reference
-
-  res.cookie('customerToken', token, authCookieOptions(30 * 24 * 60 * 60 * 1000)); // 30 days
-
-  // Find name from the most recent order
-  const latestOrder = await prisma.order.findFirst({
-    where: { customerPhone: phone },
-    orderBy: { createdAt: 'desc' },
-    select: { customerName: true, customerEmail: true },
-  });
-
-  return ok(res, {
-    customer: { phone, name: latestOrder?.customerName ?? '', email: latestOrder?.customerEmail ?? null },
-  });
-});
+router.post('/auth/login', (_req, res) =>
+  fail(
+    res,
+    410,
+    'LOGIN_UNAVAILABLE',
+    'Customer sign-in is unavailable. To check an order, use order tracking with your order number and phone number.'
+  )
+);
 
 // ─── POST /v1/customer/auth/logout ────────────────────────────────────────────
 

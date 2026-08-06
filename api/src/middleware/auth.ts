@@ -71,21 +71,30 @@ export async function requireAdmin(req: Request, res: Response, next: NextFuncti
   }
 }
 
-export async function requireCustomer(req: Request, res: Response, next: NextFunction) {
-  try {
-    const token = req.cookies.customerToken ?? req.headers.authorization?.replace('Bearer ', '');
-    if (!token) return fail(res, 401, 'UNAUTHORIZED', 'Customer authentication required');
-
-    const payload = verifyToken(token);
-    if (payload.role !== 'customer') return fail(res, 403, 'FORBIDDEN', 'Customer access required');
-
-    req.userId = payload.sub;  // sub = customer phone for phone-based auth
-    req.role = 'customer';
-    req.jti = payload.jti;
-    next();
-  } catch {
-    return fail(res, 401, 'INVALID_TOKEN', 'Invalid or expired token');
-  }
+// Customer tokens are rejected outright.
+//
+// The only way to obtain one was POST /v1/customer/auth/login, which minted a
+// 30-day JWT for anyone who typed a phone number that had placed an order — no
+// credential at all. That endpoint is now disabled (see routes/customer.ts), but
+// tokens issued BEFORE it was disabled stay cryptographically valid for up to 30
+// days, and unlike merchant and admin tokens they have no `sessions` row, so there
+// is nothing to revoke: this guard never checked one.
+//
+// Rejecting here closes that residual window without rotating JWT_SECRET, which is
+// shared by all three roles and would sign out every merchant and admin too. No
+// legitimate caller is affected — with login disabled there are no valid customer
+// sessions to serve, and no client calls these routes (order lookup goes through
+// GET /v1/orders/track, which requires the order number).
+//
+// The real customer account system restores this guard properly, with a session
+// row and revocation like its two siblings. See docs/customer-accounts-plan.md.
+export async function requireCustomer(_req: Request, res: Response, _next: NextFunction) {
+  return fail(
+    res,
+    401,
+    'CUSTOMER_AUTH_DISABLED',
+    'Customer accounts are unavailable. To check an order, use order tracking with your order number and phone number.'
+  );
 }
 
 export async function optionalCustomer(req: Request, _res: Response, next: NextFunction) {

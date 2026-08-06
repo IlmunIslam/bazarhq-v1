@@ -131,8 +131,11 @@ export default function StorefrontShell({ shop, theme, categories, subdomain, pa
               </nav>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <Link href={shopHref('/account', subdomain)} className="sf-nav-link" style={{ fontSize: '0.875rem' }}>
-                  My Orders
+                {/* Points at order tracking, not /account: customer sign-in is
+                    disabled (it required no credential), and /track is the flow
+                    that actually works — order number + phone. */}
+                <Link href={shopHref('/track', subdomain)} className="sf-nav-link" style={{ fontSize: '0.875rem' }}>
+                  Track Order
                 </Link>
                 <Link href={shopHref('/cart', subdomain)} className="sf-cart-link">
                   Cart{count > 0 && <span className="sf-cart-badge">{count}</span>}
