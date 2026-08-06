@@ -97,18 +97,23 @@ export async function requireCustomer(_req: Request, res: Response, _next: NextF
   );
 }
 
-export async function optionalCustomer(req: Request, _res: Response, next: NextFunction) {
-  try {
-    const token = req.cookies.customerToken ?? req.headers.authorization?.replace('Bearer ', '');
-    if (token) {
-      const payload = verifyToken(token);
-      if (payload.role === 'customer') {
-        req.userId = payload.sub;
-        req.role = 'customer';
-      }
-    }
-  } catch {
-    // Guest access is fine
-  }
+// Never populates a customer identity — it only lets the request through.
+//
+// This used to read `customerToken` and, if the JWT verified with role
+// 'customer', set req.userId/req.role from it. Every such token came from the
+// credential-free login described above, so trusting one meant trusting a phone
+// number somebody typed. The middleware is mounted on zero routes today, which
+// is exactly why it is a landmine: mounting it on a checkout or order route
+// later would silently re-admit pre-fix bypass tokens, which stay valid for up
+// to 30 days and have no session row to revoke.
+//
+// The signature is kept so it stays a drop-in Express middleware and any future
+// mount point still compiles. It now does nothing but call next(), which is the
+// correct behaviour anyway for the "optional auth" contract: no identity means
+// the handler treats the caller as a guest.
+//
+// When real customer accounts land this is restored properly, reading a session-
+// backed token like requireMerchant does. See docs/customer-accounts-plan.md.
+export async function optionalCustomer(_req: Request, _res: Response, next: NextFunction) {
   next();
 }
