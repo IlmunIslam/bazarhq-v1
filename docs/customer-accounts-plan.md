@@ -132,7 +132,7 @@ envelopes do not change.
 
 > **Decision recorded:** no domain purchase right now, so the Resend + verified-domain path is
 > **off**. Mail is sent through **Gmail SMTP using a Google app password**, with the From display
-> name set to `BazarHQ` — recipients see **`BazarHQ <ilmunislam101@gmail.com>`**.
+> name set to `BazarHQ` — recipients see **`BazarHQ <bazarhq.platform@gmail.com>`**.
 
 ### 2.1 What exists in the tree today
 
@@ -156,9 +156,9 @@ envelopes do not change.
 |---|---|
 | Host | `smtp.gmail.com` |
 | Port | `465` (implicit TLS) — or `587` with STARTTLS if 465 is blocked from Render |
-| Auth user | `ilmunislam101@gmail.com` |
+| Auth user | `bazarhq.platform@gmail.com` |
 | Auth pass | **Google App Password** (16 characters) — requires 2-Step Verification enabled on the account first |
-| From header | `"BazarHQ" <ilmunislam101@gmail.com>` |
+| From header | `"BazarHQ" <bazarhq.platform@gmail.com>` |
 | Reply-To | the same address (replies land in that inbox — see §2.4) |
 | Library | `nodemailer` (+ `@types/nodemailer`) — **not yet installed** |
 
@@ -169,10 +169,10 @@ Render dashboard — a push will not carry them):
 EMAIL_PROVIDER=smtp          # "smtp" | "resend"  — selects the transport (§2.5)
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=465
-SMTP_USER=ilmunislam101@gmail.com
+SMTP_USER=bazarhq.platform@gmail.com
 SMTP_PASS=<google app password>
 SMTP_FROM_NAME=BazarHQ
-SMTP_FROM_EMAIL=ilmunislam101@gmail.com
+SMTP_FROM_EMAIL=bazarhq.platform@gmail.com
 ```
 
 `RESEND_API_KEY` / `RESEND_FROM_EMAIL` stay declared and stay empty. Nothing is deleted.
@@ -208,10 +208,10 @@ volume, bounce webhooks and reputation isolation. §2.5 is designed so that is a
 | Limit / risk | Reality | Guard |
 |---|---|---|
 | **~500 recipients/day** on a free `@gmail.com` account (Workspace is ~2,000) | Fine at OTP volumes — a signup is 1 message. 500/day is hundreds of signups plus order mail. | Add a **global daily send counter** in Redis. On exhaustion, OTP sends return `EMAIL_UNAVAILABLE` (§2.6) rather than silently failing at Google's edge. The per-email (3/15min) and per-IP (10/10min) caps in §5.1 double as a spend cap on this quota. |
-| **Google may lock or suspend the account** if traffic looks spammy | Accepted risk at this volume. A lock takes down *all* platform mail, and it is a personal account. | Keep volume low; never send bulk/marketing through it (marketing email stays out of scope until a domain exists). Monitor the send log (§7.6). |
-| **The app password is broad** | A Google app password is not scoped per-protocol — a leaked one can also read the mailbox over IMAP, not just send. | Store **only** in Render env (`sync: false`), never in the repo or a committed `.env`. Rotate immediately if exposed. **Recommendation: use a dedicated Gmail account for the platform rather than a personal one** — same zero cost, and it caps the blast radius of a leak to an empty mailbox. |
+| **Google may lock or suspend the account** if traffic looks spammy | Accepted risk at this volume. A lock takes down *all* platform mail. | Keep volume low; never send bulk/marketing through it (marketing email stays out of scope until a domain exists). Monitor the send log (§7.6). |
+| **The app password is broad** | A Google app password is not scoped per-protocol — a leaked one can also read the mailbox over IMAP, not just send. | Store **only** in Render env (`sync: false`), never in the repo or a committed `.env`. Rotate immediately if exposed. **Adopted in Sprint 0: a dedicated account (`bazarhq.platform@gmail.com`), not a personal one** — same zero cost, and it caps the blast radius of a leak to an otherwise-empty mailbox. |
 | **No delivery webhooks** | Gmail SMTP gives no programmatic bounce/complaint feedback; bounces arrive as bounce-back messages in the inbox. | This makes the `email_sends` log (§7.6) more valuable, not less — it is the only record that a send was accepted. Promote it from "optional" to **recommended**. |
-| **Sender identity is a personal address** | Recipients see `BazarHQ <ilmunislam101@gmail.com>`. Looks less established than `noreply@<domain>`. | Accepted, explicitly, as the cost of not buying a domain. The display name carries the brand. Revisit with §2.5's swap. |
+| **Sender identity is a `gmail.com` address** | Recipients see `BazarHQ <bazarhq.platform@gmail.com>`. Looks less established than `noreply@<domain>`. | Accepted, explicitly, as the cost of not buying a domain. The display name carries the brand. Revisit with §2.5's swap. |
 
 ### 2.5 A swappable transport (Resend kept intact and dormant)
 
@@ -272,7 +272,7 @@ Verifiable in production, before anything else is built:
    set in the **Render dashboard**; redeployed.
 3. Port 465 confirmed reachable from Render's egress (fall back to 587/STARTTLS if not — worth
    testing early, some hosts block 465).
-4. A real message from **`BazarHQ <ilmunislam101@gmail.com>`** lands in a **Gmail inbox and at
+4. A real message from **`BazarHQ <bazarhq.platform@gmail.com>`** lands in a **Gmail inbox and at
    least one non-Google inbox — not spam** — sent from production Render.
 5. A deliberately-broken `SMTP_PASS` produces a loud `EMAIL_UNAVAILABLE`, not a silent success.
 6. The daily-quota counter increments and, when forced past its limit, fails closed.

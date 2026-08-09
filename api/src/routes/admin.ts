@@ -6,7 +6,7 @@ import { generateSecret, generateURI, verifySync } from 'otplib';
 import QRCode from 'qrcode';
 import { validate } from '../middleware/validate';
 import { requireAdmin } from '../middleware/auth';
-import { publicRateLimit } from '../middleware/rate-limiter';
+import { publicRateLimit, rateLimiter } from '../middleware/rate-limiter';
 import { ok, created, fail } from '../utils/response';
 import { signToken } from '../utils/jwt';
 import { authCookieOptions, clearCookieOptions } from '../utils/cookies';
@@ -14,6 +14,8 @@ import { encrypt, decrypt } from '../utils/encryption';
 import { getRedis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { writeAuditLog } from '../services/audit';
+import { sendTestEmail, getQuotaUsage, hashEmail, EmailUnavailableError } from '../services/email';
+import { getTransport } from '../services/email/transport';
 import taxonomyRoutes from './admin-taxonomy';
 
 const router = Router();
@@ -40,6 +42,11 @@ const MerchantPatchSchema = z.object({
 
 const ShopPatchSchema = z.object({
   status: z.enum(['published', 'suspended', 'draft']),
+});
+
+const EmailTestSendSchema = z.object({
+  to: z.string().email(),
+  note: z.string().max(200).optional(),
 });
 
 const AnnouncementSchema = z.object({
@@ -598,6 +605,97 @@ router.get('/audit-logs', async (req, res) => {
   return ok(res, {
     logs: results,
     nextCursor: hasMore ? results[results.length - 1].createdAt.toISOString() : null,
+  });
+});
+
+// ─── POST /v1/admin/email/test-send ──────────────────────────────────────────
+// Sprint 0 (§2.7 items 3–6): proves delivery from production without going
+// through a signup, and is the tool for answering the port question — a 465
+// blocked by Render's egress surfaces here as a verbatim connection error.
+//
+// Deliberately ignores TRANSACTIONAL_EMAIL_ENABLED: this is what proves the
+// transport before that flag is flipped on.
+
+router.post(
+  '/email/test-send',
+  // Tight cap: this endpoint spends the shared daily Gmail quota, and a loose
+  // one would let a compromised admin session drain it.
+  rateLimiter({ windowSecs: 60 * 60, max: 10, keyPrefix: 'rl:email-test' }),
+  validate(EmailTestSendSchema),
+  async (req, res) => {
+    const { to, note } = req.body as { to: string; note?: string };
+
+    const admin = await prisma.adminAccount.findUnique({
+      where: { id: req.adminId },
+      select: { email: true },
+    });
+
+    const quotaBefore = await getQuotaUsage();
+
+    try {
+      const messageId = await sendTestEmail(to, note);
+
+      await writeAuditLog({
+        actorId: req.adminId!,
+        actorEmail: admin?.email ?? 'unknown',
+        action: 'EMAIL_TEST_SEND',
+        targetType: 'EmailSend',
+        // Recipient is hashed in the audit trail for the same reason it is
+        // hashed in email_sends (§7.6).
+        metadata: { toEmailHash: hashEmail(to), messageId, outcome: 'sent' },
+        ipAddress: req.ip,
+      });
+
+      return ok(res, {
+        message: 'Email accepted by the transport. Check the inbox (and the spam folder).',
+        messageId,
+        quota: quotaBefore,
+      });
+    } catch (err) {
+      const reason = err instanceof EmailUnavailableError ? err.reason : 'send_failed';
+      const detail = (err as Error).message;
+
+      await writeAuditLog({
+        actorId: req.adminId!,
+        actorEmail: admin?.email ?? 'unknown',
+        action: 'EMAIL_TEST_SEND',
+        targetType: 'EmailSend',
+        metadata: { toEmailHash: hashEmail(to), outcome: 'failed', reason, detail: detail.slice(0, 500) },
+        ipAddress: req.ip,
+      });
+
+      // Admin-only diagnostic route, so the transport error is surfaced
+      // verbatim — that string is the whole point of the endpoint.
+      return fail(res, 503, 'EMAIL_UNAVAILABLE', `Send failed (${reason}): ${detail}`);
+    }
+  },
+);
+
+// ─── GET /v1/admin/email/status ──────────────────────────────────────────────
+// Read-only: is the transport configured, how much of today's quota is spent,
+// and the last few send attempts. No secrets are returned.
+
+router.get('/email/status', async (_req, res) => {
+  const transport = getTransport();
+  const quota = await getQuotaUsage();
+
+  const recent = await prisma.emailSend.findMany({
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+    select: {
+      id: true, template: true, status: true,
+      providerMessageId: true, error: true, createdAt: true,
+    },
+  });
+
+  return ok(res, {
+    provider: transport.name,
+    configured: transport.isConfigured(),
+    transactionalEmailEnabled:
+      (process.env.TRANSACTIONAL_EMAIL_ENABLED ?? 'false').trim().toLowerCase() === 'true',
+    smtpPort: Number(process.env.SMTP_PORT) || 465,
+    quota,
+    recent,
   });
 });
 

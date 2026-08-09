@@ -50,7 +50,47 @@ services:
       - key: UPSTASH_REDIS_TOKEN
         sync: false
 
-      # --- Email (Resend) ---
+      # --- Email: transport selection (Sprint 0, design doc §2.5) ---
+      # "smtp" (active) | "resend" (dormant). Buying a domain later is a config
+      # swap: set this to "resend" + fill RESEND_* below. No code change.
+      - key: EMAIL_PROVIDER
+        sync: false
+
+      # --- Email: Gmail SMTP (ACTIVE transport, §2.2) ---
+      # SMTP_PASS is a Google App Password — 16 chars, requires 2-Step
+      # Verification on the account. It is NOT scoped to sending: a leaked one
+      # also reads the mailbox over IMAP. Enter it in the dashboard only, never
+      # in the repo, and rotate immediately if exposed.
+      - key: SMTP_HOST
+        sync: false
+      # 465 = implicit TLS (default). If Render's egress blocks 465 the symptom
+      # is a connection timeout at send time, NOT an auth error — set 587 here
+      # to fall back to STARTTLS. No redeploy needed, just a restart.
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM_NAME
+        sync: false
+      - key: SMTP_FROM_EMAIL
+        sync: false
+
+      # --- Email: staged rollout + quota guard ---
+      # OFF for Sprint 0. The four order/merchant senders have never delivered a
+      # message in production; this keeps them from all firing at once and
+      # eating the shared 500/day Gmail quota that the OTP path depends on.
+      # Flip to "true" deliberately once OTP is proven. (Password reset and OTP
+      # are NOT gated by this.)
+      - key: TRANSACTIONAL_EMAIL_ENABLED
+        sync: false
+      # Optional. Defaults to 450 — deliberately under Gmail's ~500/day so the
+      # ceiling is ours (a clean EMAIL_UNAVAILABLE) rather than Google's edge.
+      - key: EMAIL_DAILY_QUOTA
+        sync: false
+
+      # --- Email (Resend) — DORMANT, kept declared and empty (§2.5) ---
       - key: RESEND_API_KEY
         sync: false
       - key: RESEND_FROM_EMAIL

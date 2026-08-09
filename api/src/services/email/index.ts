@@ -1,6 +1,8 @@
-import { Resend } from 'resend';
+import { deliver, EmailUnavailableError } from './transport';
 
-const FROM = process.env.RESEND_FROM_EMAIL ?? 'noreply@bazarhq.com';
+export { EmailUnavailableError, getQuotaUsage, hashEmail } from './transport';
+export type { EmailMessage, Transport } from './transport';
+
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:3000';
 
 // ─── Order email types ────────────────────────────────────────────────────────
@@ -48,26 +50,45 @@ function trackingLink(subdomain: string, orderNumber: string): string {
   return `${base}/track?orderNumber=${orderNumber}`;
 }
 
-function getClient(): Resend | null {
-  if (!process.env.RESEND_API_KEY) return null;
-  return new Resend(process.env.RESEND_API_KEY);
+// ─── Transactional gate (Sprint 0, default OFF) ───────────────────────────────
+
+/**
+ * The four order/merchant senders below have never delivered a message in
+ * production — RESEND_API_KEY was always empty. The moment a working transport
+ * lands they would all start sending at once, to real customers and merchants,
+ * off the same shared 500/day Gmail quota that the OTP path depends on.
+ *
+ * So they stay gated until OTP is proven in production, then this flips to
+ * "true" in the Render dashboard deliberately. Read per-call, not cached, so
+ * flipping it needs a restart at most — never a redeploy.
+ *
+ * NOT gated: sendPasswordResetEmail. It is account recovery, user-initiated and
+ * rare; gating it would leave a locked-out merchant with no route back in and
+ * no error to act on. Its quota draw is negligible.
+ */
+function transactionalEmailEnabled(): boolean {
+  return (process.env.TRANSACTIONAL_EMAIL_ENABLED ?? 'false').trim().toLowerCase() === 'true';
 }
+
+function gated(template: string, to: string): boolean {
+  if (transactionalEmailEnabled()) return false;
+  console.log(`[email] ${template} → ${to} suppressed (TRANSACTIONAL_EMAIL_ENABLED=false)`);
+  return true;
+}
+
+// ─── The five pre-existing senders ────────────────────────────────────────────
+// Signatures and failure semantics are unchanged (§2.5). Templates moved
+// verbatim. Only the transport underneath is different.
 
 export async function sendVerificationEmail(
   email: string,
   name: string,
   token: string
 ): Promise<void> {
+  if (gated('verification', email)) return;
   const link = `${FRONTEND_URL}/verify-email?token=${token}`;
-  const client = getClient();
 
-  if (!client) {
-    console.log(`[DEV] Verification email → ${email}\n  Link: ${link}`);
-    return;
-  }
-
-  await client.emails.send({
-    from: FROM,
+  await deliver('verification', {
     to: email,
     subject: 'Verify your BazarHQ account',
     html: `
@@ -76,7 +97,7 @@ export async function sendVerificationEmail(
       <p><a href="${link}">${link}</a></p>
       <p>This link expires in 24 hours.</p>
     `,
-  });
+  }, { throwOnFailure: true });
 }
 
 export async function sendPasswordResetEmail(
@@ -85,15 +106,8 @@ export async function sendPasswordResetEmail(
   token: string
 ): Promise<void> {
   const link = `${FRONTEND_URL}/reset-password?token=${token}`;
-  const client = getClient();
 
-  if (!client) {
-    console.log(`[DEV] Password reset email → ${email}\n  Link: ${link}`);
-    return;
-  }
-
-  await client.emails.send({
-    from: FROM,
+  await deliver('password_reset', {
     to: email,
     subject: 'Reset your BazarHQ password',
     html: `
@@ -102,7 +116,7 @@ export async function sendPasswordResetEmail(
       <p><a href="${link}">${link}</a></p>
       <p>This link expires in 1 hour. If you didn't request this, you can ignore this email.</p>
     `,
-  });
+  }, { throwOnFailure: true });
 }
 
 // ─── Order confirmation → customer ────────────────────────────────────────────
@@ -112,16 +126,10 @@ export async function sendOrderConfirmation(
   shop: ShopEmailData,
 ): Promise<void> {
   if (!order.customerEmail) return;
-  const client = getClient();
+  if (gated('order_confirmation', order.customerEmail)) return;
   const trackLink = trackingLink(shop.subdomain, order.orderNumber);
 
-  if (!client) {
-    console.log(`[DEV] Order confirmation → ${order.customerEmail}  #${order.orderNumber}`);
-    return;
-  }
-
-  await client.emails.send({
-    from: FROM,
+  await deliver('order_confirmation', {
     to: order.customerEmail,
     subject: `Your order #${order.orderNumber} is confirmed — ${shop.name}`,
     html: `
@@ -147,7 +155,7 @@ export async function sendOrderConfirmation(
         <p style="color:#6b7280;font-size:13px;margin-top:24px">Powered by BazarHQ</p>
       </div>
     `,
-  }).catch((err: Error) => console.error('[email] order confirmation failed:', err.message));
+  });
 }
 
 // ─── New order alert → merchant ───────────────────────────────────────────────
@@ -157,16 +165,10 @@ export async function sendMerchantNewOrder(
   merchantEmail: string,
   shop: ShopEmailData,
 ): Promise<void> {
-  const client = getClient();
+  if (gated('merchant_new_order', merchantEmail)) return;
   const dashboardLink = `${FRONTEND_URL}/dashboard/orders`;
 
-  if (!client) {
-    console.log(`[DEV] Merchant new order → ${merchantEmail}  #${order.orderNumber}`);
-    return;
-  }
-
-  await client.emails.send({
-    from: FROM,
+  await deliver('merchant_new_order', {
     to: merchantEmail,
     subject: `New order #${order.orderNumber} on ${shop.name}`,
     html: `
@@ -190,7 +192,7 @@ export async function sendMerchantNewOrder(
         <p style="color:#6b7280;font-size:13px;margin-top:24px">BazarHQ Merchant Notifications</p>
       </div>
     `,
-  }).catch((err: Error) => console.error('[email] merchant new order failed:', err.message));
+  });
 }
 
 // ─── Status update → customer ─────────────────────────────────────────────────
@@ -200,17 +202,11 @@ export async function sendOrderStatusUpdate(
   shop: ShopEmailData,
 ): Promise<void> {
   if (!order.customerEmail) return;
-  const client = getClient();
+  if (gated('order_status_update', order.customerEmail)) return;
   const trackLink = trackingLink(shop.subdomain, order.orderNumber);
   const statusLabel = STATUS_LABELS[order.status] ?? order.status;
 
-  if (!client) {
-    console.log(`[DEV] Status update → ${order.customerEmail}  #${order.orderNumber}  status=${order.status}`);
-    return;
-  }
-
-  await client.emails.send({
-    from: FROM,
+  await deliver('order_status_update', {
     to: order.customerEmail,
     subject: `Order #${order.orderNumber} ${statusLabel} — ${shop.name}`,
     html: `
@@ -227,5 +223,98 @@ export async function sendOrderStatusUpdate(
         <p style="color:#6b7280;font-size:13px;margin-top:24px">Powered by BazarHQ</p>
       </div>
     `,
-  }).catch((err: Error) => console.error('[email] status update email failed:', err.message));
+  });
+}
+
+// ─── Admin test send (§2.7 proof-of-delivery) ─────────────────────────────────
+
+/**
+ * Proves delivery from production without going through a signup.
+ *
+ * Throws like the OTP path so a broken transport is loud, and deliberately
+ * ignores TRANSACTIONAL_EMAIL_ENABLED — this is the tool used to prove the
+ * transport works *before* that flag is flipped.
+ *
+ * @throws EmailUnavailableError with the transport's verbatim error.
+ */
+export async function sendTestEmail(email: string, note?: string): Promise<string> {
+  const sentAt = new Date().toISOString();
+
+  const messageId = await deliver('admin_test', {
+    to: email,
+    subject: 'BazarHQ email transport test',
+    html: `
+      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#111827">
+        <h2 style="margin-bottom:4px">Transport test</h2>
+        <p>If you are reading this in an <strong>inbox</strong> (not spam), the BazarHQ email transport works end to end.</p>
+        <p style="color:#6b7280;font-size:13px">Sent at ${sentAt}</p>
+        ${note ? `<p style="color:#6b7280;font-size:13px">Note: ${note}</p>` : ''}
+        <p style="color:#6b7280;font-size:13px;margin-top:24px">Powered by BazarHQ</p>
+      </div>
+    `,
+  }, { throwOnUnconfigured: true, throwOnFailure: true });
+
+  if (!messageId) {
+    throw new EmailUnavailableError('send_failed', 'transport returned no messageId');
+  }
+
+  return messageId;
+}
+
+// ─── OTP — INVERTED SEMANTICS (§2.6) ──────────────────────────────────────────
+
+/**
+ * The one sender that THROWS. Non-negotiable, and the opposite of every sender
+ * above.
+ *
+ * For an order receipt, a silent no-op is tolerable. For a login code it is the
+ * worst possible failure: the signup reports success, the customer waits on a
+ * code-entry screen for mail that was never sent, and nothing anywhere records
+ * a problem.
+ *
+ * The caller MUST therefore:
+ *   - run this INSIDE the transaction that creates the OTP challenge, so the
+ *     throw rolls the challenge row back — a failure the user did not cause
+ *     must not burn their 3-per-15-min send allowance; and
+ *   - map EmailUnavailableError to 503 EMAIL_UNAVAILABLE.
+ *
+ * Deliberately NOT gated by TRANSACTIONAL_EMAIL_ENABLED: OTP is the critical
+ * path the flag exists to protect.
+ *
+ * @throws EmailUnavailableError when unconfigured, quota-exhausted, or the send fails.
+ * @returns provider messageId, to be recorded so "I never got the code" is diagnosable.
+ */
+export async function sendOtpEmail(
+  email: string,
+  code: string,
+  opts: { expiryMinutes?: number } = {},
+): Promise<string> {
+  const expiryMinutes = opts.expiryMinutes ?? 10;
+
+  const messageId = await deliver('otp', {
+    to: email,
+    subject: `${code} is your BazarHQ verification code`,
+    html: `
+      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#111827">
+        <h2 style="margin-bottom:4px">Your verification code</h2>
+        <p style="font-size:2rem;font-weight:700;letter-spacing:0.3em;margin:24px 0;color:#111827">${code}</p>
+        <p>This code expires in ${expiryMinutes} minutes.</p>
+        <p style="color:#6b7280;font-size:13px;margin-top:24px">
+          If you didn't request this code, you can ignore this email — nobody can use it without access to your inbox.
+        </p>
+        <p style="color:#6b7280;font-size:13px">Powered by BazarHQ</p>
+      </div>
+    `,
+    // NOTE: the code appears in the subject and body above — that is the point
+    // of the message. It must never reach a log line, a console path, or the
+    // email_sends row (which stores only a template name and a recipient hash).
+  }, { throwOnUnconfigured: true, throwOnFailure: true });
+
+  // deliver() only returns null on a tolerated failure, and neither is tolerated
+  // here; this keeps the non-null contract honest for the caller.
+  if (!messageId) {
+    throw new EmailUnavailableError('send_failed', 'transport returned no messageId');
+  }
+
+  return messageId;
 }

@@ -8,7 +8,7 @@ interface RateLimitOptions {
   keyPrefix: string;
 }
 
-function rateLimiter({ windowSecs, max, keyPrefix }: RateLimitOptions) {
+export function rateLimiter({ windowSecs, max, keyPrefix }: RateLimitOptions) {
   return async (req: Request, res: Response, next: NextFunction) => {
     const redis = getRedis();
     if (!redis) return next(); // skip if Redis not configured

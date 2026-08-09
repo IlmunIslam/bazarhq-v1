@@ -504,3 +504,25 @@ model CustomerSmsPreference {
 
   @@map("customer_sms_preferences")
 }
+
+// Sprint 0 (§7.6) — the only programmatic record that a send was accepted.
+// Gmail SMTP publishes no delivery webhooks: bounces arrive as human-readable
+// messages in the platform inbox and nothing is machine-readable. This log is
+// how "the code never arrived" gets answered.
+//
+// Recipient is stored HASHED, never as an address. `status` is a plain string
+// ('sent' | 'failed') rather than an enum so no new Postgres TYPE is created.
+model EmailSend {
+  id                String   @id @default(uuid())
+  toEmailHash       String   @map("to_email_hash")
+  template          String
+  status            String
+  providerMessageId String?  @map("provider_message_id")
+  error             String?
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([toEmailHash, createdAt])
+  @@index([template, status, createdAt])
+  @@map("email_sends")
+}
