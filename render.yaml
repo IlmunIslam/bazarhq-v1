@@ -51,12 +51,31 @@ services:
         sync: false
 
       # --- Email: transport selection (Sprint 0, design doc §2.5) ---
-      # "smtp" (active) | "resend" (dormant). Buying a domain later is a config
-      # swap: set this to "resend" + fill RESEND_* below. No code change.
+      # "brevo" (ACTIVE, default) | "smtp" (dormant) | "resend" (dormant).
+      # Three swappable providers; switching is this variable, no code change.
+      # Set this to "brevo".
       - key: EMAIL_PROVIDER
         sync: false
 
-      # --- Email: Gmail SMTP (ACTIVE transport, §2.2) ---
+      # --- Email: Brevo transactional API (ACTIVE transport) ---
+      # HTTPS on 443. This is the only transport that works here: Render's free
+      # tier blocks outbound SMTP entirely (ports 25/465/587) as of Sept 2025,
+      # per Render's changelog — which is why the SMTP block below is dormant.
+      # The sender must be a VERIFIED sender in Brevo; an unverified one is
+      # rejected at send time as a 400, not at configuration time.
+      - key: BREVO_API_KEY
+        sync: false
+      # Optional. The sender falls back to SMTP_FROM_EMAIL / SMTP_FROM_NAME
+      # below, so these only need setting if the two must differ.
+      - key: BREVO_SENDER_EMAIL
+        sync: false
+      - key: BREVO_SENDER_NAME
+        sync: false
+
+      # --- Email: Gmail SMTP (DORMANT — unreachable from Render's free tier) ---
+      # Kept intact and selectable with EMAIL_PROVIDER=smtp on a paid instance,
+      # where outbound SMTP is permitted. SMTP_FROM_NAME / SMTP_FROM_EMAIL are
+      # still read under the Brevo transport as the sender fallback.
       # SMTP_PASS is a Google App Password — 16 chars, requires 2-Step
       # Verification on the account. It is NOT scoped to sending: a leaked one
       # also reads the mailbox over IMAP. Enter it in the dashboard only, never
@@ -81,13 +100,14 @@ services:
       # --- Email: staged rollout + quota guard ---
       # OFF for Sprint 0. The four order/merchant senders have never delivered a
       # message in production; this keeps them from all firing at once and
-      # eating the shared 500/day Gmail quota that the OTP path depends on.
+      # eating the shared 300/day Brevo quota that the OTP path depends on.
       # Flip to "true" deliberately once OTP is proven. (Password reset and OTP
       # are NOT gated by this.)
       - key: TRANSACTIONAL_EMAIL_ENABLED
         sync: false
-      # Optional. Defaults to 450 — deliberately under Gmail's ~500/day so the
-      # ceiling is ours (a clean EMAIL_UNAVAILABLE) rather than Google's edge.
+      # Optional. Defaults to 300 — Brevo's free transactional allowance, so our
+      # counter trips with a clean EMAIL_UNAVAILABLE before Brevo refuses. Raise
+      # it on a paid Brevo plan, or set 450 when running the SMTP transport.
       - key: EMAIL_DAILY_QUOTA
         sync: false
 

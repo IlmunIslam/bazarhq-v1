@@ -610,9 +610,11 @@ router.get('/audit-logs', async (req, res) => {
 
 // ─── POST /v1/admin/email/test-send ──────────────────────────────────────────
 // Sprint 0 (§2.7 items 3–6): proves delivery from production without going
-// through a signup. It reports the transport error verbatim, which is how both
-// egress faults were diagnosed: 465 blocked (ETIMEDOUT at connect) and then
-// IPv6 unroutable on 587 (ENETUNREACH). See gmail-smtp.ts.
+// through a signup. It reports the transport error verbatim, which is how the
+// egress faults were diagnosed — 465 blocked, then IPv6 unroutable on 587, and
+// finally that Render's free tier blocks outbound SMTP outright. Under the
+// Brevo transport the same field distinguishes a bad API key (401) from an
+// unverified sender (400). See brevo-http.ts.
 //
 // Deliberately ignores TRANSACTIONAL_EMAIL_ENABLED: this is what proves the
 // transport before that flag is flipped on.
@@ -694,8 +696,10 @@ router.get('/email/status', async (_req, res) => {
     configured: transport.isConfigured(),
     transactionalEmailEnabled:
       (process.env.TRANSACTIONAL_EMAIL_ENABLED ?? 'false').trim().toLowerCase() === 'true',
-    // Mirrors the transport's DEFAULT_PORT (587) — see gmail-smtp.ts for why.
-    smtpPort: Number(process.env.SMTP_PORT) || 587,
+    // Only meaningful for the SMTP transport; null under an HTTP provider, so
+    // the read-out never implies a port is in play when none is. Mirrors that
+    // transport's DEFAULT_PORT (587) — see gmail-smtp.ts for why.
+    smtpPort: transport.name === 'gmail-smtp' ? Number(process.env.SMTP_PORT) || 587 : null,
     quota,
     recent,
   });

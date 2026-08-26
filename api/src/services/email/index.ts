@@ -56,7 +56,7 @@ function trackingLink(subdomain: string, orderNumber: string): string {
  * The four order/merchant senders below have never delivered a message in
  * production — RESEND_API_KEY was always empty. The moment a working transport
  * lands they would all start sending at once, to real customers and merchants,
- * off the same shared 500/day Gmail quota that the OTP path depends on.
+ * off the same shared 300/day Brevo quota that the OTP path depends on.
  *
  * So they stay gated until OTP is proven in production, then this flips to
  * "true" in the Render dashboard deliberately. Read per-call, not cached, so

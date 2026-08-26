@@ -45,21 +45,31 @@ export class EmailUnavailableError extends Error {
 let _transport: Transport | null = null;
 
 /**
- * Selects the transport from EMAIL_PROVIDER ("smtp" | "resend"), defaulting to
- * "smtp". Both modules are required lazily so the dormant provider's SDK is
- * never constructed — Resend stays installed and intact but unused (§2.5).
+ * Selects the transport from EMAIL_PROVIDER, defaulting to "brevo".
+ *
+ *   "brevo"  — Brevo transactional API over HTTPS. ACTIVE. The only one that
+ *              works from Render's free tier, which blocks outbound SMTP
+ *              entirely (ports 25/465/587, since Sept 2025).
+ *   "smtp"   — Gmail SMTP. Dormant here, viable on a paid instance.
+ *   "resend" — dormant, needs a verified domain.
+ *
+ * Each module is required lazily, so the dormant providers' clients are never
+ * constructed and their credentials are never read (§2.5).
  */
 export function getTransport(): Transport {
   if (_transport) return _transport;
 
-  const provider = (process.env.EMAIL_PROVIDER ?? 'smtp').trim().toLowerCase();
+  const provider = (process.env.EMAIL_PROVIDER ?? 'brevo').trim().toLowerCase();
 
   if (provider === 'resend') {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     _transport = require('./resend').resendTransport as Transport;
-  } else {
+  } else if (provider === 'smtp') {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     _transport = require('./gmail-smtp').gmailSmtpTransport as Transport;
+  } else {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    _transport = require('./brevo-http').brevoHttpTransport as Transport;
   }
 
   return _transport;
@@ -73,11 +83,15 @@ export function __setTransportForTest(t: Transport | null): void {
 // ─── Daily quota counter (§2.4) ───────────────────────────────────────────────
 
 /**
- * Gmail free accounts cap at ~500 recipients/day. We stop short of that so the
- * ceiling is ours (a clean EMAIL_UNAVAILABLE) rather than Google's edge, which
- * fails opaquely and counts against account reputation.
+ * Brevo's free plan allows 300 transactional emails/day. The counter matches it
+ * exactly rather than stopping short: unlike Gmail's ~500 — where overshooting
+ * costs account reputation — Brevo simply refuses with a credits error, so
+ * there is nothing to buy headroom against.
+ *
+ * Set EMAIL_DAILY_QUOTA to override (a paid Brevo plan, or 450 when running the
+ * Gmail SMTP transport on a paid instance).
  */
-const DEFAULT_DAILY_QUOTA = 450;
+const DEFAULT_DAILY_QUOTA = 300;
 
 function dailyQuota(): number {
   const raw = Number(process.env.EMAIL_DAILY_QUOTA);
@@ -125,18 +139,60 @@ async function releaseQuota(): Promise<void> {
   }
 }
 
-/** Current usage — powers the admin quota read-out. */
-export async function getQuotaUsage(): Promise<{ sent: number; limit: number; available: boolean }> {
+export interface QuotaUsage {
+  /** Sends counted today, or null when the counter could not be read. */
+  sent: number | null;
+  limit: number;
+  /** Headroom left today, or null when unknown. */
+  remaining: number | null;
+  /** Whether another send would be allowed through right now. */
+  available: boolean;
+  /** Why `sent` is or is not trustworthy. */
+  counter: 'redis' | 'not-configured' | 'error';
+}
+
+/**
+ * Current usage — powers the admin quota read-out.
+ *
+ * `available` answers "would the next send get through", which is what a reader
+ * sitting next to `sent` and `limit` takes it to mean. It previously reported
+ * whether *Redis* was reachable, so a healthy, completely unused quota rendered
+ * as `{ sent: 0, limit: 450, available: false }` — which reads as "exhausted at
+ * zero sends". That is the bug.
+ *
+ * The Redis-reachability signal is real and worth keeping, so it moved to
+ * `counter` rather than being dropped. Note the two disagree on purpose: with no
+ * counter, `reserveQuota` lets every send through (an unreachable counter is not
+ * evidence of an exhausted quota), so the honest report is `available: true`
+ * with `counter: 'not-configured'` and `sent: null` — unknown, not zero.
+ *
+ * `counter` being anything but 'redis' in production is itself a finding: the
+ * quota is unenforced, and the same Redis backs brute-force lockout and rate
+ * limiting.
+ */
+export async function getQuotaUsage(): Promise<QuotaUsage> {
   const limit = dailyQuota();
   const redis = getRedis();
-  if (!redis) return { sent: 0, limit, available: false };
+
+  // Quota unenforced ⇒ sends proceed ⇒ available.
+  if (!redis) {
+    return { sent: null, limit, remaining: null, available: true, counter: 'not-configured' };
+  }
 
   try {
     const raw = await redis.get<number | string>(quotaKey());
-    const sent = raw == null ? 0 : Number(raw);
-    return { sent: Number.isFinite(sent) ? sent : 0, limit, available: true };
+    const parsed = raw == null ? 0 : Number(raw);
+    const sent = Number.isFinite(parsed) ? parsed : 0;
+    return {
+      sent,
+      limit,
+      remaining: Math.max(0, limit - sent),
+      available: sent < limit,
+      counter: 'redis',
+    };
   } catch {
-    return { sent: 0, limit, available: false };
+    // reserveQuota swallows the same failure and allows the send.
+    return { sent: null, limit, remaining: null, available: true, counter: 'error' };
   }
 }
 

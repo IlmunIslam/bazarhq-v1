@@ -148,9 +148,17 @@ envelopes do not change.
   hand. Corroborating evidence: `POST /v1/admin/merchants/:id/verify-email` (`admin.ts:382-409`)
   exists solely so a superadmin can flip `emailVerified` manually, and `auth.ts:126` hard-blocks
   unverified merchant logins — that override is load-bearing precisely because no mail arrives.
-- **`nodemailer` is not installed** (verified). Adding it is a build task, not a design task.
+- **`nodemailer` was not installed** (verified at design time). Installed in Sprint 0; see the
+  §2.2 note on why the SMTP transport it backs is dormant.
 
 ### 2.2 The Gmail SMTP configuration
+
+> **SUPERSEDED in Sprint 0 — Gmail SMTP is dormant, not active.** Render's free tier blocks
+> outbound SMTP entirely (ports 25/465/587) as of September 2025, so no SMTP configuration is
+> reachable from the deployed API. The active transport is **Brevo's HTTP API** over 443
+> (`EMAIL_PROVIDER=brevo`, `api/src/services/email/brevo-http.ts`), sending from the same verified
+> address. Everything below is accurate and stays selectable with `EMAIL_PROVIDER=smtp` on a paid
+> instance — including the 587 + forced-IPv4 findings, which were each a real fault. Runbook §4.
 
 | Setting | Value |
 |---|---|
@@ -161,13 +169,14 @@ envelopes do not change.
 | From header | `"BazarHQ" <bazarhq.platform@gmail.com>` |
 | Reply-To | the same address (replies land in that inbox — see §2.4) |
 | Address family | **IPv4, forced** — Render has no outbound IPv6 route and `smtp.gmail.com` publishes AAAA records. See the runbook §4. |
-| Library | `nodemailer` (+ `@types/nodemailer`) — **not yet installed** |
+| Library | `nodemailer` (+ `@types/nodemailer`) — installed in Sprint 0 |
 
 New environment variables, all `sync: false` in `render.yaml` (they must be entered by hand in the
 Render dashboard — a push will not carry them):
 
 ```
-EMAIL_PROVIDER=smtp          # "smtp" | "resend"  — selects the transport (§2.5)
+EMAIL_PROVIDER=brevo         # "brevo" (ACTIVE) | "smtp" | "resend" — selects the transport (§2.5)
+BREVO_API_KEY=<brevo v3 api key>   # the active transport; the SMTP_* below are dormant
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=bazarhq.platform@gmail.com
@@ -269,10 +278,11 @@ Therefore `sendOtpEmail()` is a **separate function with inverted semantics**:
 Verifiable in production, before anything else is built:
 
 1. 2-Step Verification enabled on the Google account; app password generated.
-2. `nodemailer` installed; transport layer per §2.5; `EMAIL_PROVIDER=smtp` and the six SMTP vars
-   set in the **Render dashboard**; redeployed.
-3. A reachable path to Gmail from Render's egress confirmed. Outcome: **587 + forced IPv4** —
-   465 is blocked (ETIMEDOUT) and IPv6 is unroutable (ENETUNREACH). Runbook §4.
+2. Transport layer per §2.5; `EMAIL_PROVIDER=brevo` and `BREVO_API_KEY` set in the **Render
+   dashboard**; redeployed.
+3. A reachable path from Render's egress confirmed. Outcome: **none exists over SMTP** — the free
+   tier blocks 25/465/587 outright. Switched to Brevo's HTTP API on 443. The SMTP findings along
+   the way (587 + forced IPv4) hold for a paid instance. Runbook §4.
 4. A real message from **`BazarHQ <bazarhq.platform@gmail.com>`** lands in a **Gmail inbox and at
    least one non-Google inbox — not spam** — sent from production Render.
 5. A deliberately-broken `SMTP_PASS` produces a loud `EMAIL_UNAVAILABLE`, not a silent success.
