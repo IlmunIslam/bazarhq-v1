@@ -48,19 +48,43 @@ export async function requireAdmin(req: Request, res: Response, next: NextFuncti
     const session = await prisma.session.findUnique({ where: { jti: payload.jti } });
     if (!session || session.revokedAt) return fail(res, 401, 'SESSION_REVOKED', 'Session has been revoked');
 
-    // 30-minute inactivity timeout
+    // 30-minute inactivity timeout.
+    //
+    // Fail CLOSED: the sliding window lives only in Redis, so skipping this when
+    // Redis is down silently converted every admin session into an 8-hour one
+    // with no idle expiry. Refusing the request is the honest failure — and it
+    // matches POST /admin/auth/login, which now declines to mint a session at
+    // all without Redis, so there is no state where a live admin session
+    // outlives the guard that bounds it.
     const { getRedis } = await import('../lib/redis');
     const redis = getRedis();
-    if (redis) {
-      const activityKey = `admin:activity:${payload.jti}`;
-      const active = await redis.get(activityKey);
-      if (!active) {
-        // Revoke the session to keep DB clean
-        await prisma.session.update({ where: { jti: payload.jti }, data: { revokedAt: new Date() } });
-        return fail(res, 401, 'SESSION_EXPIRED', 'Session expired due to inactivity. Please log in again.');
-      }
-      await redis.expire(activityKey, 30 * 60);
+    if (!redis) {
+      return fail(
+        res, 503, 'SERVICE_UNAVAILABLE',
+        'Admin session validation is temporarily unavailable. Please try again shortly.',
+      );
     }
+
+    const activityKey = `admin:activity:${payload.jti}`;
+    let active: unknown;
+    try {
+      active = await redis.get(activityKey);
+    } catch {
+      // Reachable-but-erroring Redis would otherwise fall into the outer catch
+      // and be reported as INVALID_TOKEN — sending an admin to re-authenticate
+      // over what is actually an infrastructure fault. Still denies access.
+      return fail(
+        res, 503, 'SERVICE_UNAVAILABLE',
+        'Admin session validation is temporarily unavailable. Please try again shortly.',
+      );
+    }
+
+    if (!active) {
+      // Revoke the session to keep DB clean
+      await prisma.session.update({ where: { jti: payload.jti }, data: { revokedAt: new Date() } });
+      return fail(res, 401, 'SESSION_EXPIRED', 'Session expired due to inactivity. Please log in again.');
+    }
+    await redis.expire(activityKey, 30 * 60);
 
     req.adminId = payload.sub;
     req.role = 'admin';

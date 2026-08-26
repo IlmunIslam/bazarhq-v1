@@ -45,11 +45,15 @@ services:
         sync: false
 
       # --- Cache / rate-limit (Upstash Redis) ---
-      # NOT optional in production. With no reachable Redis the app does not
-      # fail — it silently drops admin TOTP two-factor, the admin inactivity
-      # timeout, merchant + admin brute-force lockout, every rate limiter, and
-      # the daily email quota. GET /v1/admin/system/health reports which guards
-      # are live.
+      # A HARD DEPENDENCY for the admin panel. Admin sign-in and every
+      # authenticated admin request now return 503 without a reachable Redis,
+      # rather than quietly proceeding with TOTP two-factor and the 30-minute
+      # inactivity timeout disabled. Budget for that: no Redis = no admin
+      # access, by design.
+      #
+      # Still degrading silently (unchanged): merchant brute-force lockout,
+      # every rate limiter, and the daily email quota.
+      # GET /v1/admin/system/health reports which guards are live.
       #
       # Copy both straight from the Upstash console. The URL must be the HTTPS
       # REST endpoint (https://<id>.upstash.io) — the rediss:// string on the

@@ -72,12 +72,20 @@ const AnnouncementSchema = z.object({
  *
  * @returns the raw JWT for native clients, or null when it went out as a cookie.
  */
+/**
+ * Takes the Redis client rather than fetching it, so the compiler — not a
+ * reviewer — enforces that no admin session can be minted without one.
+ *
+ * The 30-minute inactivity clock lives entirely in Redis. A session issued
+ * without it is an admin session that never times out, which is precisely the
+ * guard-that-disables-itself failure this signature exists to prevent.
+ */
 async function issueAdminJwt(
+  redis: NonNullable<ReturnType<typeof getRedis>>,
   adminId: string,
   req: import('express').Request,
   res: import('express').Response
 ): Promise<string | null> {
-  const redis = getRedis();
   const { token, jti } = signToken({ sub: adminId, role: 'admin' });
 
   await prisma.session.create({
@@ -91,9 +99,7 @@ async function issueAdminJwt(
   });
 
   // Start 30-minute inactivity clock
-  if (redis) {
-    await redis.set(`admin:activity:${jti}`, '1', { ex: 30 * 60 });
-  }
+  await redis.set(`admin:activity:${jti}`, '1', { ex: 30 * 60 });
 
   const isMobile = req.get('x-client') === 'mobile';
   if (!isMobile) {
@@ -109,15 +115,35 @@ router.post('/auth/login', publicRateLimit, validate(LoginSchema), async (req, r
   const redis = getRedis();
   const clientIp = (req.ip ?? '').replace(/^::ffff:/, '');
 
-  if (redis) {
-    const locked = await redis.get(`admin:bf:lock:${email}`);
-    if (locked) {
-      return fail(res, 429, 'ACCOUNT_LOCKED', 'Too many failed login attempts. Try again in 15 minutes.');
-    }
+  // Fail CLOSED. Every protection on this endpoint lives in Redis — TOTP
+  // staging, the 3-strike lockout, and the inactivity clock the issued session
+  // depends on. Without it this route previously degraded into "password alone
+  // grants an admin session that never expires", and did so silently.
+  //
+  // The blast radius is deliberate and worth stating: no Redis means NO admin
+  // login at all, including for accounts with 2FA disabled. Refusing a
+  // password-only login is the same decision as refusing to skip TOTP — the
+  // account is simply one guard shorter to begin with.
+  if (!redis) {
+    // Locked out of /v1/admin/system/health too (it sits behind requireAdmin),
+    // so the Render log is the only remaining diagnostic. Make it say so.
+    console.error(
+      '[admin-auth] refusing admin login: Redis is unavailable, so TOTP staging, ' +
+      'brute-force lockout and the session inactivity timeout cannot be enforced. ' +
+      'Check UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN.',
+    );
+    return fail(
+      res, 503, 'SERVICE_UNAVAILABLE',
+      'Admin sign-in is temporarily unavailable. Please try again shortly.',
+    );
+  }
+
+  const locked = await redis.get(`admin:bf:lock:${email}`);
+  if (locked) {
+    return fail(res, 429, 'ACCOUNT_LOCKED', 'Too many failed login attempts. Try again in 15 minutes.');
   }
 
   const recordFailure = async () => {
-    if (!redis) return;
     const key = `admin:bf:count:${email}`;
     const count = await redis.incr(key);
     if (count === 1) await redis.expire(key, 15 * 60);
@@ -149,25 +175,19 @@ router.post('/auth/login', publicRateLimit, validate(LoginSchema), async (req, r
     return fail(res, 401, 'INVALID_CREDENTIALS', 'Invalid email or password');
   }
 
-  if (redis) {
-    await redis.del(`admin:bf:count:${email}`);
-    await redis.del(`admin:bf:lock:${email}`);
-  }
+  await redis.del(`admin:bf:count:${email}`);
+  await redis.del(`admin:bf:lock:${email}`);
 
   if (admin.twoFaEnabled && admin.twoFaSecret) {
-    // TOTP required — issue a short-lived temp token
+    // TOTP required — issue a short-lived temp token and stop here. There is no
+    // longer a path from a valid password straight to a session for a 2FA
+    // account: the only continuation is POST /auth/verify-totp.
     const tempToken = randomUUID();
-    if (redis) {
-      await redis.set(`admin:pending:${tempToken}`, admin.id, { ex: 5 * 60 });
-    } else {
-      // Without Redis, TOTP can't be staged — fall through to full login
-    }
-    if (redis) {
-      return ok(res, { requiresTotp: true, tempToken });
-    }
+    await redis.set(`admin:pending:${tempToken}`, admin.id, { ex: 5 * 60 });
+    return ok(res, { requiresTotp: true, tempToken });
   }
 
-  const token = await issueAdminJwt(admin.id, req, res);
+  const token = await issueAdminJwt(redis, admin.id, req, res);
   return ok(res, {
     admin: { id: admin.id, email: admin.email, fullName: admin.fullName, role: admin.role },
     ...(token ? { token } : {}),
@@ -195,7 +215,7 @@ router.post('/auth/verify-totp', publicRateLimit, validate(TotpVerifySchema), as
   }
 
   await redis.del(`admin:pending:${tempToken}`);
-  const token = await issueAdminJwt(admin.id, req, res);
+  const token = await issueAdminJwt(redis, admin.id, req, res);
 
   return ok(res, {
     admin: { id: admin.id, email: admin.email, fullName: admin.fullName, role: admin.role },
