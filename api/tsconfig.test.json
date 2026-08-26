@@ -1,0 +1,13 @@
+// Typechecking only. The production build uses ./tsconfig.json, whose `include`
+// is ["src"] — so tests are never emitted into dist/ and never ship.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    // The base rootDir is "./src" so the build emits a flat dist/. Widen it here
+    // only, since nothing is emitted from this config.
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  "include": ["src", "tests"]
+}

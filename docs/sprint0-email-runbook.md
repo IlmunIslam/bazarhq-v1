@@ -3,6 +3,28 @@
 Operational companion to `customer-accounts-plan.md` §2. Design rationale lives
 there; this file is what you do, in order, and what to do when it breaks.
 
+## 0. Verified state
+
+Sprint 0 is **done and confirmed in production**. What actually works, as
+opposed to what was originally planned:
+
+| | Final state |
+|---|---|
+| Transport | **Brevo transactional API over HTTPS** (`EMAIL_PROVIDER=brevo`) |
+| Delivery | verified — real message from `BazarHQ <bazarhq.platform@gmail.com>` reaching the **inbox**, not spam |
+| Gmail SMTP | **dormant.** Render's free tier blocks outbound SMTP outright — §4 |
+| Resend | dormant, needs a verified domain — §8 |
+| Daily quota | 300 (Brevo free), counter live on Redis, increments confirmed |
+| Redis | was **unconfigured in production**; now connected — §9 |
+| `TRANSACTIONAL_EMAIL_ENABLED` | still `false`. The four order/merchant senders stay off until deliberately flipped — §5 |
+| Guards | all six report live on `GET /v1/admin/system/health`; rate limiting confirmed to trip (429 on the 11th test-send in an hour) |
+
+The invariants this sprint depends on are pinned in `api/tests/email.test.ts` —
+see §10.
+
+The plan doc's §2.2 still describes Gmail SMTP as the transport and carries a
+banner saying so; the SMTP details there remain accurate for a paid instance.
+
 ## 1. Apply the SQL first, then deploy
 
 `api/prisma/sql/sprint0_email_sends.sql`, applied by hand in the Supabase SQL
@@ -201,3 +223,108 @@ On Resend: it must send from the **verified domain**. Pointing
 original reason Gmail SMTP was chosen over an ESP. Brevo sidesteps this with a
 verified *single sender*, which authenticates the one address rather than a
 domain.
+
+## 9. Redis was silently unconfigured — what that had disabled
+
+Found while verifying the quota counter: `/email/status` reported
+`counter: "not-configured"`, meaning `getRedis()` had been returning `null` in
+production. Two causes, both now fixed:
+
+1. **The env var names did not match.** The code read `UPSTASH_REDIS_URL` /
+   `UPSTASH_REDIS_TOKEN`; Upstash's console, docs and integrations all emit
+   `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`. Copying the canonical
+   pair configured nothing. **Both pairs are now accepted**, Upstash's taking
+   precedence, and the REST-named pair is what the dashboard should hold.
+2. **Nothing failed loudly.** Every call site treats a null client as "no Redis,
+   carry on", so the symptom was silence.
+
+Use the **HTTPS REST endpoint** (`https://<id>.upstash.io`). The `rediss://`
+string shown on the same Upstash page will not work — `@upstash/redis` speaks
+REST over 443 — and is now refused with a log line rather than building a client
+whose every call fails invisibly.
+
+What had been off for the whole period Redis was absent:
+
+| Guard | Consequence while off |
+|---|---|
+| **Admin TOTP two-factor** | the TOTP step was **skipped, not failed** — a password alone granted a superadmin session |
+| **Admin inactivity timeout** | no 30-minute idle expiry; only the 8-hour JWT expiry applied |
+| Admin brute-force lockout | 3-strike lock never engaged |
+| Merchant brute-force lockout | 5-strike lock never engaged |
+| Every rate limiter | `next()` immediately, including the 10/hour test-send cap |
+| Daily email quota | unenforced |
+
+The first two were a live authentication bypass, not a degraded guard. **Admin
+auth now fails closed**: `POST /v1/admin/auth/login` and every request through
+`requireAdmin` return `503 SERVICE_UNAVAILABLE` without a reachable Redis, for
+2FA and non-2FA accounts alike. Redis is therefore a hard dependency for admin
+access — no Redis, no admin panel, by design.
+
+Merchant login, rate limiting and the email quota still degrade silently. That is
+deliberate: their only Redis-backed guard is worth less than the blast radius of
+locking every merchant out over a Redis blip.
+
+### Verifying the guards, not just the connection
+
+`GET /v1/admin/system/health` does a real Redis round-trip (write, read back,
+delete) rather than checking that env vars are set, and reports what that makes
+live:
+
+```
+status: "healthy" | "degraded"
+redis:  { state: "connected", latencyMs }
+guards: { adminTotpTwoFactor, adminInactivityTimeout, adminBruteForceLockout,
+          merchantBruteForceLockout, rateLimiting, emailDailyQuota }
+```
+
+To prove they *engage* rather than merely report:
+
+- **Rate limiting** — an 11th `POST /email/test-send` within the hour returns
+  `429 RATE_LIMITED` without spending a send. Confirmed.
+- **Merchant lockout** — 5 wrong passwords, then a 6th attempt returns
+  `429 ACCOUNT_LOCKED` for 30 minutes. Use a throwaway merchant: a correct
+  password resets the counter but will not clear a lock.
+- **Admin lockout** — same, but the threshold is **3** and the lock is 15
+  minutes. Not on your only superadmin account.
+- **Quota** — `/email/status` reports `counter: "redis"` with a real `sent`.
+
+## 10. The pinned invariants
+
+`api/tests/email.test.ts` — 24 tests, no new dependencies (`node:test` +
+`node:assert`, run through `tsx`).
+
+```
+npm test --workspace=api          # run
+npm run typecheck --workspace=api # typecheck src + tests
+```
+
+It covers the properties that fail *silently* if broken, which is why they are
+pinned rather than left to review:
+
+- `sendOtpEmail` throws, with the correct `reason` on each of unconfigured,
+  send-failed and quota-exhausted — and refuses to return an empty messageId.
+- The five pre-Sprint-0 senders keep their exact split: three swallow failures
+  (`orders.ts` is fire-and-forget), two propagate.
+- `TRANSACTIONAL_EMAIL_ENABLED` suppresses **exactly four** senders. Password
+  reset, OTP and the admin test-send must survive it, and only the literal
+  string `"true"` enables it.
+- The quota counter fails closed at the limit, and a failed send releases its
+  reservation.
+- **The OTP code never reaches a console line or the `email_sends` row**, on any
+  of the four outcomes.
+
+Each was mutation-checked: deliberately breaking it — leaking the code to a log,
+gating password reset, dropping `throwOnUnconfigured`, restoring the old quota
+bug, skipping the reservation release — makes the suite fail. A test that cannot
+fail is worse than no test.
+
+The suite never touches a database or a network: `api/.env` points at the
+**production** database, so Prisma is stubbed in the module cache and
+`DATABASE_URL` is pointed at a dead socket. Redis is a loopback server speaking
+Upstash's REST protocol, because `@upstash/redis` defines its commands as own
+instance properties and auto-pipelines them — a monkeypatched method is bypassed
+entirely and the test passes while exercising nothing.
+
+Tests live in `api/tests/` and are typechecked by `tsconfig.test.json`. The
+production build uses `tsconfig.json`, whose `include` is `["src"]`, so nothing
+here is ever emitted to `dist/`.
