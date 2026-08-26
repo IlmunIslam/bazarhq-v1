@@ -63,9 +63,10 @@ services:
       # in the repo, and rotate immediately if exposed.
       - key: SMTP_HOST
         sync: false
-      # 465 = implicit TLS (default). If Render's egress blocks 465 the symptom
-      # is a connection timeout at send time, NOT an auth error — set 587 here
-      # to fall back to STARTTLS. No redeploy needed, just a restart.
+      # 587 (STARTTLS) is the default and the proven value on Render: outbound
+      # 465 is blocked here and times out at connect. 465 = implicit TLS, for a
+      # host where it is open. The transport also forces an IPv4 connection —
+      # Render has no outbound IPv6 route and smtp.gmail.com has AAAA records.
       - key: SMTP_PORT
         sync: false
       - key: SMTP_USER

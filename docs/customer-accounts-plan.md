@@ -155,11 +155,12 @@ envelopes do not change.
 | Setting | Value |
 |---|---|
 | Host | `smtp.gmail.com` |
-| Port | `465` (implicit TLS) — or `587` with STARTTLS if 465 is blocked from Render |
+| Port | `587` (STARTTLS) — **proven on Render**; outbound 465 is blocked there. See the runbook §4. |
 | Auth user | `bazarhq.platform@gmail.com` |
 | Auth pass | **Google App Password** (16 characters) — requires 2-Step Verification enabled on the account first |
 | From header | `"BazarHQ" <bazarhq.platform@gmail.com>` |
 | Reply-To | the same address (replies land in that inbox — see §2.4) |
+| Address family | **IPv4, forced** — Render has no outbound IPv6 route and `smtp.gmail.com` publishes AAAA records. See the runbook §4. |
 | Library | `nodemailer` (+ `@types/nodemailer`) — **not yet installed** |
 
 New environment variables, all `sync: false` in `render.yaml` (they must be entered by hand in the
@@ -168,7 +169,7 @@ Render dashboard — a push will not carry them):
 ```
 EMAIL_PROVIDER=smtp          # "smtp" | "resend"  — selects the transport (§2.5)
 SMTP_HOST=smtp.gmail.com
-SMTP_PORT=465
+SMTP_PORT=587
 SMTP_USER=bazarhq.platform@gmail.com
 SMTP_PASS=<google app password>
 SMTP_FROM_NAME=BazarHQ
@@ -270,8 +271,8 @@ Verifiable in production, before anything else is built:
 1. 2-Step Verification enabled on the Google account; app password generated.
 2. `nodemailer` installed; transport layer per §2.5; `EMAIL_PROVIDER=smtp` and the six SMTP vars
    set in the **Render dashboard**; redeployed.
-3. Port 465 confirmed reachable from Render's egress (fall back to 587/STARTTLS if not — worth
-   testing early, some hosts block 465).
+3. A reachable path to Gmail from Render's egress confirmed. Outcome: **587 + forced IPv4** —
+   465 is blocked (ETIMEDOUT) and IPv6 is unroutable (ENETUNREACH). Runbook §4.
 4. A real message from **`BazarHQ <bazarhq.platform@gmail.com>`** lands in a **Gmail inbox and at
    least one non-Google inbox — not spam** — sent from production Render.
 5. A deliberately-broken `SMTP_PASS` produces a loud `EMAIL_UNAVAILABLE`, not a silent success.

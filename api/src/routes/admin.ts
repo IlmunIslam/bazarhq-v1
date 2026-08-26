@@ -610,8 +610,9 @@ router.get('/audit-logs', async (req, res) => {
 
 // ─── POST /v1/admin/email/test-send ──────────────────────────────────────────
 // Sprint 0 (§2.7 items 3–6): proves delivery from production without going
-// through a signup, and is the tool for answering the port question — a 465
-// blocked by Render's egress surfaces here as a verbatim connection error.
+// through a signup. It reports the transport error verbatim, which is how both
+// egress faults were diagnosed: 465 blocked (ETIMEDOUT at connect) and then
+// IPv6 unroutable on 587 (ENETUNREACH). See gmail-smtp.ts.
 //
 // Deliberately ignores TRANSACTIONAL_EMAIL_ENABLED: this is what proves the
 // transport before that flag is flipped on.
@@ -693,7 +694,8 @@ router.get('/email/status', async (_req, res) => {
     configured: transport.isConfigured(),
     transactionalEmailEnabled:
       (process.env.TRANSACTIONAL_EMAIL_ENABLED ?? 'false').trim().toLowerCase() === 'true',
-    smtpPort: Number(process.env.SMTP_PORT) || 465,
+    // Mirrors the transport's DEFAULT_PORT (587) — see gmail-smtp.ts for why.
+    smtpPort: Number(process.env.SMTP_PORT) || 587,
     quota,
     recent,
   });

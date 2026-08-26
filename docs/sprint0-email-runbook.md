@@ -21,7 +21,7 @@ Rollback: `DROP TABLE "email_sends";` — nothing references it.
 |---|---|
 | `EMAIL_PROVIDER` | `smtp` |
 | `SMTP_HOST` | `smtp.gmail.com` |
-| `SMTP_PORT` | `465` |
+| `SMTP_PORT` | `587` — see §4, 465 is blocked on Render |
 | `SMTP_USER` | the dedicated platform Gmail address |
 | `SMTP_PASS` | the 16-character Google App Password |
 | `SMTP_FROM_NAME` | `BazarHQ` |
@@ -52,17 +52,39 @@ last 20 send attempts. No secrets.
 Definition of done (§2.7): a real message from `BazarHQ <…>` lands in **a Gmail
 inbox and at least one non-Google inbox, not spam**, sent from production.
 
-## 4. If port 465 is blocked from Render's egress
+## 4. Reaching Gmail from Render: 587 **and** forced IPv4
 
-The symptom is a **connection timeout** (`ETIMEDOUT` / `ECONNREFUSED`) reported
-verbatim by the test-send endpoint — not an auth error. A `535` is a credential
-problem, not a port problem.
+Two independent egress faults, cleared in this order. Both surfaced as the
+verbatim transport error from `POST /v1/admin/email/test-send`. The combination
+is non-obvious, so it is recorded here and in `gmail-smtp.ts`.
 
-Fix without a code change or redeploy: set `SMTP_PORT=587` in the dashboard and
-restart. The transport derives its TLS mode from the port — 465 is implicit TLS,
-587 opens cleartext and upgrades via STARTTLS. `requireTLS` is set on the 587
+**Fault 1 — outbound 465 is blocked.** Symptom: a **connection timeout**
+(`ETIMEDOUT` / `ECONNREFUSED`) at connect, *not* an auth error. A `535` is a
+credential problem, not a port problem. Fix: `SMTP_PORT=587`. No redeploy — the
+transport derives its TLS mode from the port, and `requireTLS` is set on the 587
 path, so a stripped STARTTLS capability fails the send rather than transmitting
 the app password in the clear.
+
+**Fault 2 — no outbound IPv6 route.** With 587 the connection got further and
+then failed with `ENETUNREACH` on `2607:f8b0:400e:c02::6c:587`. `smtp.gmail.com`
+publishes both A and AAAA records; nodemailer resolves both, concatenates them,
+and picks one **at random** per connection, so this looked intermittent. Fixed in
+code: the transport resolves the A record itself (`dns.lookup(host, {family:4})`)
+and hands nodemailer an IPv4 literal, with `tls.servername` set so SNI and
+certificate verification still run against `smtp.gmail.com`.
+
+Two things that do *not* work, both checked:
+
+- **`family: 4` on `createTransport`.** Nodemailer 9.0.5 builds its socket
+  options from scratch in `SMTPConnection#_connect` and never reads
+  `options.family`; it is not in the type definitions either. Silently ignored.
+- **`dns.setDefaultResultOrder('ipv4first')` at startup.** It works, but it is
+  process-global and would change resolution for Supabase, Cloudinary and
+  Upstash too. Rejected as too broad for an SMTP problem.
+
+So: **the working configuration is 587 + forced IPv4.** Neither half is
+sufficient alone. The resolved address is cached for 5 minutes and dropped on any
+send failure, so a retry re-resolves rather than repeating a dead hop.
 
 ## 5. The staged-rollout flag
 
