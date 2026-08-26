@@ -11,7 +11,7 @@ import { ok, created, fail } from '../utils/response';
 import { signToken } from '../utils/jwt';
 import { authCookieOptions, clearCookieOptions } from '../utils/cookies';
 import { encrypt, decrypt } from '../utils/encryption';
-import { getRedis } from '../lib/redis';
+import { getRedis, getRedisConfigState } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { writeAuditLog } from '../services/audit';
 import { sendTestEmail, getQuotaUsage, hashEmail, EmailUnavailableError } from '../services/email';
@@ -713,9 +713,47 @@ router.get('/system/health', async (_req, res) => {
     prisma.shop.count(),
     prisma.order.count(),
   ]);
+
+  // A real round-trip, not just "were the env vars set". Every guard below
+  // treats an absent or broken Redis as "carry on", so a client that constructs
+  // fine but cannot answer would leave them all off with no visible symptom —
+  // which is exactly how this went unnoticed. Write, read back, delete.
+  const redis = getRedis();
+  let redisState: string = getRedisConfigState();
+  let redisLatencyMs: number | null = null;
+
+  if (redis) {
+    const key = `health:probe:${randomUUID()}`;
+    const nonce = randomUUID();
+    const startedAt = Date.now();
+    try {
+      await redis.set(key, nonce, { ex: 30 });
+      const readBack = await redis.get<string>(key);
+      await redis.del(key);
+      redisLatencyMs = Date.now() - startedAt;
+      redisState = String(readBack) === nonce ? 'connected' : 'unexpected-response';
+    } catch (err) {
+      redisLatencyMs = Date.now() - startedAt;
+      redisState = `error: ${(err as Error).message.slice(0, 200)}`;
+    }
+  }
+
+  const redisOk = redisState === 'connected';
+
   return ok(res, {
-    status: 'healthy',
+    status: redisOk ? 'healthy' : 'degraded',
     database: 'connected',
+    redis: { state: redisState, latencyMs: redisLatencyMs },
+    // Each of these is enforced only while Redis answers. False here is not a
+    // warning about a future problem — the guard is off right now.
+    guards: {
+      adminTotpTwoFactor: redisOk,
+      adminInactivityTimeout: redisOk,
+      adminBruteForceLockout: redisOk,
+      merchantBruteForceLockout: redisOk,
+      rateLimiting: redisOk,
+      emailDailyQuota: redisOk,
+    },
     userCount,
     shopCount,
     orderCount,
