@@ -6,24 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 BazarHQ is a **multi-tenant SaaS e-commerce platform** for Bangladesh. Merchants get a subdomain (`{shop}.bazarhq.com`) with a full storefront + admin dashboard. Architecture is documented in `../BazarHQ SDD.docx`, `../BazarHQ Implementation Plan.docx`, and `../BazarHQ ERD.docx`.
 
-## Monorepo Structure
-
-```
-bazarhq-v1/
-├── frontend/     # Next.js 14 (App Router) — storefront + merchant dashboard + superadmin
-├── api/          # Node.js + Express — REST API at api.bazarhq.com/v1
-└── shared/       # TypeScript types shared between frontend and api
-```
-
 ## Development Commands
 
 ### API (`api/`)
 ```bash
-cd api
-npm install
-npx prisma db push                             # sync schema to the DB in the connection string
-npx prisma generate                            # regenerate Prisma client after schema changes
-npm run dev                                    # start Express dev server
 npm run seed:admin                             # one-off: create the superadmin account
 npm run seed:taxonomy                          # idempotent: starter marketplace taxonomy (C0)
 ```
@@ -53,29 +39,12 @@ The established process is:
 Keep schema changes additive — new tables, new nullable columns, new indexes.
 A nullable column with no default is metadata-only in Postgres (no table rewrite).
 
-### Frontend (`frontend/`)
-```bash
-cd frontend
-npm install
-npm run dev      # Next.js dev server
-npm run build    # production build
-npm run lint     # ESLint
-```
-
-## Tech Stack
+## Hosting
 
 | Layer | Choice |
 |-------|--------|
-| Frontend | Next.js 14 (App Router), TypeScript, React Hook Form + Zod |
-| Backend | Node.js + Express, TypeScript |
-| Database | PostgreSQL via Supabase, Prisma ORM |
-| Auth | Supabase Auth (Google OAuth), custom JWT (httpOnly cookies, HS256) |
-| Image CDN | Cloudinary |
-| Email | Resend.com |
-| SMS | SSL Wireless (Bangladesh) |
-| Cache / Rate limit | Upstash Redis |
 | Frontend hosting | Vercel (auto-deploy on push to main, root: `/frontend`) |
-| API hosting | Render (auto-deploy on push, root: `/api`) — **schema changes do NOT auto-apply**, see below |
+| API hosting | Render (auto-deploy on push, root: `/api`) — **schema changes do NOT auto-apply**, see above |
 
 ## Live Deployment URLs
 
@@ -97,8 +66,6 @@ All served by Next.js via wildcard DNS (`*.bazarhq.com` → Cloudflare):
 2. `{shop}.bazarhq.com` — Customer storefront (public + optional customer auth)
 3. `{shop}.bazarhq.com/admin` — Merchant dashboard (merchant JWT required)
 4. `bazarhq.com/superadmin` — Super admin panel (IP-whitelisted + TOTP 2FA)
-
-Next.js route groups: `(auth)/`, `dashboard/`, `[shop]/`, `superadmin/`
 
 ## Multi-Tenancy Pattern
 
@@ -133,16 +100,6 @@ Next.js route groups: `(auth)/`, `dashboard/`, `[shop]/`, `superadmin/`
 - **Audit log**: `audit_logs` table is INSERT-only — enforced by PostgreSQL trigger; never UPDATE or DELETE from it
 - **Sensitive fields** (bkash_number, nagad_number, ssl credentials, 2FA secrets) are encrypted with AES-256-GCM; API responses mask all but last 4 characters
 
-## Database Schema — 18 Tables (5 Domains)
-
-| Domain | Tables |
-|--------|--------|
-| Identity & Auth | users, admin_accounts, sessions, email_verifications |
-| Shop & Tenancy | shops, shop_themes, shop_categories |
-| Catalogue | products, product_images, product_variants |
-| Commerce | orders, order_items, order_timeline, payment_configs |
-| Platform | announcements, audit_logs, page_views, saved_addresses, customer_sms_preferences |
-
 ## Payment Methods
 
 - **COD** — full support
@@ -152,7 +109,7 @@ Next.js route groups: `(auth)/`, `dashboard/`, `[shop]/`, `superadmin/`
 
 ## Notification Patterns
 
-- Email (Resend) + SMS (SSL Wireless) for order lifecycle events
+- Email (Brevo HTTP API — see `docs/sprint0-email-runbook.md`) + SMS (SSL Wireless) for order lifecycle events
 - SMS failure auto-falls back to email
 - Retry: 3 attempts with exponential backoff (1s → 5s → 15s)
 - Always check `customer_sms_preferences` before sending SMS
@@ -163,4 +120,4 @@ Build **vertically** — each sprint delivers a complete feature (DB migration +
 
 ## Environment Variables
 
-Each sub-project needs its own `.env` file. Required accounts: Supabase, Vercel, Railway, Cloudinary, Resend, Upstash Redis, Cloudflare, SSL Wireless.
+Each sub-project needs its own `.env` file.

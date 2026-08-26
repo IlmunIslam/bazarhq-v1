@@ -91,7 +91,22 @@
       "Bash(grep -oE \"'/admin/[^']*'|\\\\`/admin/[^\\\\`]*\\\\`\")",
       "Bash(python -)",
       "Bash(grep -n \"Could not reorder\\\\|const results = await Promise.all\\\\|alert-\\\\${notice.type}\" app/superadmin/taxonomy/page.tsx \"app/superadmin/taxonomy/[id]/page.tsx\")",
-      "Bash(npx eas-cli *)"
+      "Bash(npx eas-cli *)",
+      "Bash(npx expo-updates *)",
+      "Bash([ -s \"$f\" ])",
+      "Bash(awk *)",
+      "Bash(echo \"API TSC EXIT: $?\")",
+      "Bash(claude --version)",
+      "Read(//c/Users/ilmun/.local/bin/**)",
+      "Read(//c/Users/ilmun/.claude/**)",
+      "Read(//c/Users/ilmun/**)",
+      "Bash(find 'C:\\\\Users\\\\ilmun/.claude/projects' -name *.jsonl)",
+      "Bash(claude update *)",
+      "Bash(grep -nE \"^#{1,4} |^\\\\*\\\\*§\" docs/customer-accounts-plan.md)",
+      "Bash(echo \"--- generate exit: $? ---\")",
+      "Bash(cp verify-sprint0.ts __TRACKED_VAR__/verify-sprint0.ts)",
+      "Bash(rm -f verify-sprint0.ts dbg.ts)",
+      "Bash(grep -rniE \"smtp_pass\\\\s*=\\\\s*[^<\\\\$]|app.?password.*[a-z]{16}|RESEND_API_KEY\\\\s*=\\\\s*re_\" api/src/services/email/ render.yaml docs/sprint0-email-runbook.md api/prisma/sql/sprint0_email_sends.sql)"
     ]
   }
 }
